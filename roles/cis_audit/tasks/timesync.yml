@@ -1,0 +1,222 @@
+---
+- name: Time Sync | Load Astra OS path map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/paths.yml"
+    name: cis_os_paths
+  changed_when: false
+  tags: [cis, cis_2_3, timesync, chapter_timesync, astra, audit]
+
+- name: Time Sync | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_ts_timesyncd_conf: "{{ cis_os_paths.paths.time_sync.timesyncd_conf | default('/etc/systemd/timesyncd.conf') }}"
+    cis_ts_timesyncd_conf_d: "{{ cis_os_paths.paths.time_sync.timesyncd_conf_d | default('/etc/systemd/timesyncd.conf.d') }}"
+    cis_ts_chrony_conf: /etc/chrony/chrony.conf
+    cis_ts_chrony_sources_d: /etc/chrony/sources.d
+    cis_ts_approved_ntp_servers: "{{ cis_ts_approved_ntp_servers | default([]) }}"
+    cis_ts_approved_ptp_profiles: "{{ cis_ts_approved_ptp_profiles | default([]) }}"
+    cis_ts_approved_domain_controllers: "{{ cis_ts_approved_domain_controllers | default([]) }}"
+    cis_ts_approved_time_source_policy: "{{ cis_ts_approved_time_source_policy | default([]) }}"
+    cis_ts_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_ntp_servers"
+    - "MISSING_OT_BASELINE:approved_ptp_profiles"
+    - "MISSING_OT_BASELINE:approved_domain_controller_time_sources"
+    - "MISSING_OT_BASELINE:approved_time_source_policy_ntp_ptp_dc_priority"
+  changed_when: false
+  tags: [cis, cis_2_3, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.1-2.3.3.3 | Collect time daemon unit state
+  ansible.builtin.command: "systemctl show {{ item }} --property=Id,LoadState,UnitFileState,ActiveState --no-pager"
+  loop:
+  - systemd-timesyncd.service
+  - chrony.service
+  register: cis_2_3_unit_show_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_3_1, cis_2_3_1_1, cis_2_3_2_2, cis_2_3_3_3, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.1 | Collect timedatectl state
+  ansible.builtin.command: timedatectl show --property=NTP --property=NTPSynchronized --no-pager
+  register: cis_2_3_1_timedatectl_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_3_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_3_1_loaded_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | rejectattr('stdout', 'search', 'LoadState=not-found') | map(attribute='item') | list }}"
+    cis_2_3_1_active_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+    cis_2_3_1_evidence:
+      timedatectl_output: "{{ cis_2_3_1_timedatectl_cmd.stdout | default('') }}"
+      loaded_time_daemon_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | rejectattr('stdout', 'search', 'LoadState=not-found') | map(attribute='item') | list }}"
+      active_time_daemon_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+      command: "timedatectl show --property=NTP --property=NTPSynchronized; systemctl show <unit>"
+      missing_information_placeholders: "{{ cis_ts_missing_information_placeholders }}"
+    cis_2_3_1_result:
+      control_id: "2.3.1"
+      title: "Ensure time synchronization is in use"
+      status: "{{ 'pass' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'At least one time synchronization daemon is active' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'No active supported time synchronization daemon detected' }}"
+  changed_when: false
+  tags: [cis, cis_2_3_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.1.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_3_1_1_enabled_active_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+    cis_2_3_1_1_evidence:
+      enabled_and_active_time_daemon_units: "{{ (cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+      all_candidate_units:
+      - systemd-timesyncd.service
+      - chrony.service
+      command: "systemctl show <unit> --property=UnitFileState,ActiveState"
+    cis_2_3_1_1_result:
+      control_id: "2.3.1.1"
+      title: "Ensure a single time synchronization daemon is in use"
+      status: "{{ 'pass' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) == 1) else 'fail' }}"
+      reason: "{{ 'Exactly one time synchronization daemon is enabled and active' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) == 1) else 'Expected exactly one enabled+active daemon among chrony and systemd-timesyncd' }}"
+  changed_when: false
+  tags: [cis, cis_2_3_1_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.2.1 | Collect systemd-timesyncd configured servers
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -h -E '^[[:space:]]*(NTP|FallbackNTP)[[:space:]]*=' "{{ cis_ts_timesyncd_conf }}" "{{ cis_ts_timesyncd_conf_d }}"/*.conf 2>/dev/null || true
+  register: cis_2_3_2_1_timesyncd_servers_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_3_2_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.2.1 | Parse servers and build evidence/result
+  ansible.builtin.set_fact:
+    cis_2_3_2_1_timesyncd_servers: "{{ (cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique) }}"
+    cis_2_3_2_1_unapproved_servers: "{{ ((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) }}"
+    cis_2_3_2_1_evidence:
+      timesyncd_conf: "{{ cis_ts_timesyncd_conf }}"
+      timesyncd_conf_d: "{{ cis_ts_timesyncd_conf_d }}"
+      configured_servers: "{{ (cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique) }}"
+      approved_ntp_servers: "{{ cis_ts_approved_ntp_servers }}"
+      unapproved_servers: "{{ ((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) }}"
+      command: "grep NTP/FallbackNTP in timesyncd config files"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_ntp_servers"
+      - "MISSING_OT_BASELINE:approved_time_source_policy_ntp_ptp_dc_priority"
+    cis_2_3_2_1_result:
+      control_id: "2.3.2.1"
+      title: "Ensure systemd-timesyncd configured with authorized timeserver"
+      status: "{{ 'fail' if ((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique | length) == 0) else ('manual_review_required' if (cis_ts_approved_ntp_servers | length) == 0 else ('pass' if ((((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'No NTP/FallbackNTP servers configured for systemd-timesyncd' if ((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique | length) == 0) else ('Configured servers found; approved OT baseline is missing' if (cis_ts_approved_ntp_servers | length) == 0 else ('Configured servers match approved baseline' if ((((cis_2_3_2_1_timesyncd_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:NTP|FallbackNTP)[[:space:]]*=[[:space:]]*([^#\\n]+)$') | join(' ') | split() | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) | length) == 0) else 'Unapproved systemd-timesyncd servers found')) }}"
+  changed_when: false
+  tags: [cis, cis_2_3_2_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_3_2_2_timesyncd_unit_output: "{{ ((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'systemd-timesyncd.service') | map(attribute='stdout') | list | first | default('')) }}"
+    cis_2_3_2_2_evidence:
+      unit: systemd-timesyncd.service
+      unit_output: "{{ ((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'systemd-timesyncd.service') | map(attribute='stdout') | list | first | default('')) }}"
+      command: "systemctl show systemd-timesyncd.service --property=Id,LoadState,UnitFileState,ActiveState"
+    cis_2_3_2_2_result:
+      control_id: "2.3.2.2"
+      title: "Ensure systemd-timesyncd is enabled and running"
+      status: "{{ 'pass' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'systemd-timesyncd.service') | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'systemd-timesyncd is enabled and active' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'systemd-timesyncd.service') | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'systemd-timesyncd is not both enabled and active' }}"
+  changed_when: false
+  tags: [cis, cis_2_3_2_2, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.3.1 | Collect chrony configured servers
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -h -E '^[[:space:]]*(server|pool|peer)[[:space:]]+' "{{ cis_ts_chrony_conf }}" "{{ cis_ts_chrony_sources_d }}"/*.sources 2>/dev/null || true
+  register: cis_2_3_3_1_chrony_servers_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_3_3_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.3.1 | Parse servers and build evidence/result
+  ansible.builtin.set_fact:
+    cis_2_3_3_1_chrony_servers: "{{ (cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique) }}"
+    cis_2_3_3_1_unapproved_servers: "{{ ((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) }}"
+    cis_2_3_3_1_evidence:
+      chrony_conf: "{{ cis_ts_chrony_conf }}"
+      chrony_sources_d: "{{ cis_ts_chrony_sources_d }}"
+      configured_servers: "{{ (cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique) }}"
+      approved_ntp_servers: "{{ cis_ts_approved_ntp_servers }}"
+      unapproved_servers: "{{ ((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) }}"
+      command: "grep server/pool/peer lines in chrony config files"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_ntp_servers"
+      - "MISSING_OT_BASELINE:approved_time_source_policy_ntp_ptp_dc_priority"
+    cis_2_3_3_1_result:
+      control_id: "2.3.3.1"
+      title: "Ensure chrony is configured with authorized timeserver"
+      status: "{{ 'fail' if ((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | list | length) == 0) else ('manual_review_required' if (cis_ts_approved_ntp_servers | length) == 0 else ('pass' if ((((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'No chrony time servers configured' if ((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | list | length) == 0) else ('Configured servers found; approved OT baseline is missing' if (cis_ts_approved_ntp_servers | length) == 0 else ('Configured servers match approved baseline' if ((((cis_2_3_3_1_chrony_servers_cmd.stdout | regex_findall('(?im)^[[:space:]]*(?:server|pool|peer)[[:space:]]+([^[:space:]#]+)') | map('trim') | reject('equalto', '') | list | unique)) | difference(cis_ts_approved_ntp_servers | default([])) | length) == 0) else 'Unapproved chrony servers found')) }}"
+  changed_when: false
+  tags: [cis, cis_2_3_3_1, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.3.2 | Collect chronyd process owner evidence
+  ansible.builtin.shell: |
+    ps -ef | awk '(/[c]hronyd/ && $1!="_chrony") { print $1 }'
+  register: cis_2_3_3_2_chronyd_user_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_3_3_2, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.3.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_3_3_2_evidence:
+      non_compliant_process_users: "{{ cis_2_3_3_2_chronyd_user_cmd.stdout_lines | default([]) }}"
+      command: "ps -ef | awk '(/[c]hronyd/ && $1!=\"_chrony\") { print $1 }'"
+    cis_2_3_3_2_result:
+      control_id: "2.3.3.2"
+      title: "Ensure chrony is running as user _chrony"
+      status: "{{ 'pass' if ((cis_2_3_3_2_chronyd_user_cmd.stdout_lines | default([]) | length) == 0) else 'fail' }}"
+      reason: "{{ 'No chronyd process is running as an unexpected user' if ((cis_2_3_3_2_chronyd_user_cmd.stdout_lines | default([]) | length) == 0) else 'chronyd process is running as a user other than _chrony' }}"
+  changed_when: false
+  tags: [cis, cis_2_3_3_2, timesync, chapter_timesync, astra, audit]
+
+- name: 2.3.3.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_3_3_3_chrony_unit_output: "{{ ((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'chrony.service') | map(attribute='stdout') | list | first | default('')) }}"
+    cis_2_3_3_3_evidence:
+      unit: chrony.service
+      unit_output: "{{ ((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'chrony.service') | map(attribute='stdout') | list | first | default('')) }}"
+      command: "systemctl show chrony.service --property=Id,LoadState,UnitFileState,ActiveState"
+    cis_2_3_3_3_result:
+      control_id: "2.3.3.3"
+      title: "Ensure chrony is enabled and running"
+      status: "{{ 'pass' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'chrony.service') | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'chrony is enabled and active' if (((cis_2_3_unit_show_cmd.results | default([])) | selectattr('item', 'equalto', 'chrony.service') | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | list | length) > 0) else 'chrony is not both enabled and active' }}"
+  changed_when: false
+  tags: [cis, cis_2_3_3_3, timesync, chapter_timesync, astra, audit]
+
+- name: Time Sync | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_time_sync_chapter_summary:
+      chapter_group: Time Sync
+      implemented_control_ids:
+      - 2.3.1
+      - 2.3.1.1
+      - 2.3.2.1
+      - 2.3.2.2
+      - 2.3.3.1
+      - 2.3.3.2
+      - 2.3.3.3
+      results:
+        "2.3.1": "{{ cis_2_3_1_result }}"
+        "2.3.1.1": "{{ cis_2_3_1_1_result }}"
+        "2.3.2.1": "{{ cis_2_3_2_1_result }}"
+        "2.3.2.2": "{{ cis_2_3_2_2_result }}"
+        "2.3.3.1": "{{ cis_2_3_3_1_result }}"
+        "2.3.3.2": "{{ cis_2_3_3_2_result }}"
+        "2.3.3.3": "{{ cis_2_3_3_3_result }}"
+      evidence:
+        "2.3.1": "{{ cis_2_3_1_evidence }}"
+        "2.3.1.1": "{{ cis_2_3_1_1_evidence }}"
+        "2.3.2.1": "{{ cis_2_3_2_1_evidence }}"
+        "2.3.2.2": "{{ cis_2_3_2_2_evidence }}"
+        "2.3.3.1": "{{ cis_2_3_3_1_evidence }}"
+        "2.3.3.2": "{{ cis_2_3_3_2_evidence }}"
+        "2.3.3.3": "{{ cis_2_3_3_3_evidence }}"
+      missing_information_placeholders: "{{ cis_ts_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_2_3, timesync, chapter_timesync, astra, audit]

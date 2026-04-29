@@ -1332,14 +1332,18 @@
         "ASTRA-0005",
         "ASTRA-3011"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Time Sync; detected 10 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/timesync.yml",
+        "reports/lab/TimeSync/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T19:45:03Z",
+      "comments": "Implemented audit-only Time Sync controls scoped to linux_cis.xlsx Time Sync control rows (2.3.1, 2.3.1.1, 2.3.2.1, 2.3.2.2, 2.3.3.1, 2.3.3.2, 2.3.3.3); group-header/non-control rows excluded. No remediation/restart/reboot. Explicit OT baseline placeholders retained for approved NTP/PTP/DC/time-source policies."
     },
     {
       "task_id": "ASTRA-2012",

@@ -7,6 +7,10 @@
   ansible.builtin.include_tasks: process_hardening.yml
   tags: [cis, audit, astra, process_hardening, chapter_process_hardening]
 
+- name: Audit | Execute Time Sync chapter controls
+  ansible.builtin.include_tasks: timesync.yml
+  tags: [cis, audit, astra, timesync, chapter_timesync]
+
 - name: Audit | Execute Filesystem chapter controls
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]
