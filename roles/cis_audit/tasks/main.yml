@@ -3,6 +3,10 @@
   ansible.builtin.include_tasks: bootloader.yml
   tags: [cis, audit, astra, bootloader, chapter_bootloader]
 
+- name: Audit | Execute Process Hardening chapter controls
+  ansible.builtin.include_tasks: process_hardening.yml
+  tags: [cis, audit, astra, process_hardening, chapter_process_hardening]
+
 - name: Audit | Execute SUDO chapter controls
   ansible.builtin.include_tasks: sudo.yml
   tags: [cis, audit, astra, sudo, chapter_sudo]

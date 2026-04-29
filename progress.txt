@@ -204,3 +204,11 @@
 - Created reports/lab/RootSystemAccounts/chapter_report.md with required sections and mandatory engineer approval line.
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
 2026-04-29T11:20:00Z Root&System Accounts chapter workflow closure: added ASTRA-2009 review artifact, recorded ASTRA-3009 engineer approval state, and normalized ASTRA-1009 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
+[2026-04-29T19:14:13Z] ASTRA-1010 Implement audit-only CIS chapter/group Process Hardening for Astra Linux
+- Added Process Hardening chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/process_hardening.yml.
+- Implemented only linux_cis scoped Process Hardening control rows (1.5.1 through 1.5.3); excluded non-control/header rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_process_hardening_chapter_summary.
+- Added explicit OT-safe placeholders for approved ASLR value, approved ptrace scope value, and approved core-dump policy exceptions.
+- Created reports/lab/ProcessHardening/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.

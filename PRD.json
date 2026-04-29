@@ -1180,14 +1180,18 @@
         "ASTRA-0005",
         "ASTRA-3009"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Process Hardening; detected 4 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/process_hardening.yml",
+        "reports/lab/ProcessHardening/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T19:14:13Z",
+      "comments": "Implemented audit-only Process Hardening controls in scope from linux_cis.xlsx: 1.5.1-1.5.3. No remediation actions. Group-header scope rows are intentionally non-implementable and excluded. OT baseline placeholders retained for policy-sensitive values."
     },
     {
       "task_id": "ASTRA-2010",

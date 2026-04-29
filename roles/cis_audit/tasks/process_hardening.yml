@@ -1,0 +1,116 @@
+---
+- name: Process Hardening | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_ph_expected_aslr_value: "{{ cis_ph_expected_aslr_value | default(2) }}"
+    cis_ph_expected_ptrace_scope_value: "{{ cis_ph_expected_ptrace_scope_value | default(1) }}"
+    cis_ph_expected_suid_dumpable_value: "{{ cis_ph_expected_suid_dumpable_value | default(0) }}"
+    cis_ph_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_aslr_kernel_randomize_va_space_value"
+    - "MISSING_OT_BASELINE:approved_ptrace_scope_value"
+    - "MISSING_OT_BASELINE:approved_core_dump_policy_exceptions"
+  changed_when: false
+  tags: [cis, cis_1_5, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.1 | Collect ASLR sysctl value
+  ansible.builtin.command: sysctl kernel.randomize_va_space
+  register: cis_1_5_1_aslr_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_5_1, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.1 | Parse ASLR value and build evidence/result
+  ansible.builtin.set_fact:
+    cis_1_5_1_aslr_value: "{{ (cis_1_5_1_aslr_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+    cis_1_5_1_evidence:
+      sysctl_output: "{{ cis_1_5_1_aslr_cmd.stdout | default('') }}"
+      kernel_randomize_va_space: "{{ (cis_1_5_1_aslr_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+      expected_value: "{{ cis_ph_expected_aslr_value }}"
+      command: "sysctl kernel.randomize_va_space"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_aslr_kernel_randomize_va_space_value"
+    cis_1_5_1_result:
+      control_id: "1.5.1"
+      title: "Ensure address space layout randomization is enabled"
+      status: "{{ 'manual_review_required' if ((cis_1_5_1_aslr_cmd.rc | default(1)) == 0 and ((cis_1_5_1_aslr_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_aslr_value | int)) else 'fail' }}"
+      reason: "{{ 'ASLR sysctl value is enabled; policy confirmation remains required' if ((cis_1_5_1_aslr_cmd.rc | default(1)) == 0 and ((cis_1_5_1_aslr_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_aslr_value | int)) else 'ASLR sysctl value missing or does not match expected baseline' }}"
+  changed_when: false
+  tags: [cis, cis_1_5_1, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.2 | Collect ptrace scope sysctl value
+  ansible.builtin.command: sysctl kernel.yama.ptrace_scope
+  register: cis_1_5_2_ptrace_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_5_2, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.2 | Parse ptrace scope and build evidence/result
+  ansible.builtin.set_fact:
+    cis_1_5_2_ptrace_scope_value: "{{ (cis_1_5_2_ptrace_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+    cis_1_5_2_evidence:
+      sysctl_output: "{{ cis_1_5_2_ptrace_cmd.stdout | default('') }}"
+      kernel_yama_ptrace_scope: "{{ (cis_1_5_2_ptrace_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+      expected_value: "{{ cis_ph_expected_ptrace_scope_value }}"
+      command: "sysctl kernel.yama.ptrace_scope"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_ptrace_scope_value"
+    cis_1_5_2_result:
+      control_id: "1.5.2"
+      title: "Ensure ptrace_scope is restricted"
+      status: "{{ 'manual_review_required' if ((cis_1_5_2_ptrace_cmd.rc | default(1)) == 0 and ((cis_1_5_2_ptrace_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_ptrace_scope_value | int)) else 'fail' }}"
+      reason: "{{ 'ptrace scope sysctl is restricted; policy confirmation remains required' if ((cis_1_5_2_ptrace_cmd.rc | default(1)) == 0 and ((cis_1_5_2_ptrace_cmd.stdout | regex_search('([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_ptrace_scope_value | int)) else 'ptrace scope sysctl missing or does not match expected baseline' }}"
+  changed_when: false
+  tags: [cis, cis_1_5_2, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.3 | Collect core dump restriction evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    {
+      echo "__SYSCTL__"
+      sysctl fs.suid_dumpable 2>/dev/null
+      echo "__LIMITS__"
+      grep -R -E -- '^[[:space:]]*\\*[[:space:]]+hard[[:space:]]+core[[:space:]]+0([[:space:]]|$)' /etc/security/limits.conf /etc/security/limits.d/*.conf 2>/dev/null
+    }
+  register: cis_1_5_3_core_dump_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_5_3, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: 1.5.3 | Parse core dump evidence and build result
+  ansible.builtin.set_fact:
+    cis_1_5_3_suid_dumpable_value: "{{ (cis_1_5_3_core_dump_cmd.stdout | regex_search('(?m)^fs\\.suid_dumpable\\s*=\\s*([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+    cis_1_5_3_limits_core_zero_lines: "{{ (cis_1_5_3_core_dump_cmd.stdout | regex_search('(?s)__LIMITS__\\n(.*)$', '\\1') | first | default('')).splitlines() | reject('equalto', '') | list }}"
+    cis_1_5_3_evidence:
+      raw_output: "{{ cis_1_5_3_core_dump_cmd.stdout | default('') }}"
+      fs_suid_dumpable: "{{ (cis_1_5_3_core_dump_cmd.stdout | regex_search('(?m)^fs\\.suid_dumpable\\s*=\\s*([0-9]+)$', '\\1') | first | default('-1')) | int }}"
+      limits_core_zero_lines: "{{ (cis_1_5_3_core_dump_cmd.stdout | regex_search('(?s)__LIMITS__\\n(.*)$', '\\1') | first | default('')).splitlines() | reject('equalto', '') | list }}"
+      expected_suid_dumpable: "{{ cis_ph_expected_suid_dumpable_value }}"
+      command: "sysctl fs.suid_dumpable && grep core limits in /etc/security/limits*"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_core_dump_policy_exceptions"
+    cis_1_5_3_result:
+      control_id: "1.5.3"
+      title: "Ensure core dumps are restricted"
+      status: "{{ 'pass' if (((cis_1_5_3_core_dump_cmd.stdout | regex_search('(?m)^fs\\.suid_dumpable\\s*=\\s*([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_suid_dumpable_value | int) and (((cis_1_5_3_core_dump_cmd.stdout | regex_search('(?s)__LIMITS__\\n(.*)$', '\\1') | first | default('')).splitlines() | reject('equalto', '') | list | length) > 0)) else 'fail' }}"
+      reason: "{{ 'Core dumps are restricted by fs.suid_dumpable and hard core 0 limit entries' if (((cis_1_5_3_core_dump_cmd.stdout | regex_search('(?m)^fs\\.suid_dumpable\\s*=\\s*([0-9]+)$', '\\1') | first | default('-1')) | int) == (cis_ph_expected_suid_dumpable_value | int) and (((cis_1_5_3_core_dump_cmd.stdout | regex_search('(?s)__LIMITS__\\n(.*)$', '\\1') | first | default('')).splitlines() | reject('equalto', '') | list | length) > 0)) else 'Core dump restriction evidence missing or not compliant with expected baseline' }}"
+  changed_when: false
+  tags: [cis, cis_1_5_3, process_hardening, chapter_process_hardening, astra, audit]
+
+- name: Process Hardening | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_process_hardening_chapter_summary:
+      chapter_group: Process Hardening
+      implemented_control_ids:
+      - 1.5.1
+      - 1.5.2
+      - 1.5.3
+      results:
+        "1.5.1": "{{ cis_1_5_1_result }}"
+        "1.5.2": "{{ cis_1_5_2_result }}"
+        "1.5.3": "{{ cis_1_5_3_result }}"
+      evidence:
+        "1.5.1": "{{ cis_1_5_1_evidence }}"
+        "1.5.2": "{{ cis_1_5_2_evidence }}"
+        "1.5.3": "{{ cis_1_5_3_evidence }}"
+      missing_information_placeholders: "{{ cis_ph_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_1_5, process_hardening, chapter_process_hardening, astra, audit]
