@@ -1,0 +1,285 @@
+---
+- name: Filesystem | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_fs_module_rules:
+      "1.1.1.1": { module: "cramfs", title: "Ensure cramfs kernel module is not available" }
+      "1.1.1.2": { module: "freevxfs", title: "Ensure freevxfs kernel module is not available" }
+      "1.1.1.3": { module: "hfs", title: "Ensure hfs kernel module is not available" }
+      "1.1.1.4": { module: "hfsplus", title: "Ensure hfsplus kernel module is not available" }
+      "1.1.1.5": { module: "jffs2", title: "Ensure jffs2 kernel module is not available" }
+      "1.1.1.6": { module: "overlayfs", title: "Ensure overlayfs kernel module is not available" }
+      "1.1.1.7": { module: "squashfs", title: "Ensure squashfs kernel module is not available" }
+      "1.1.1.8": { module: "udf", title: "Ensure udf kernel module is not available" }
+      "1.1.1.9": { module: "usb-storage", title: "Ensure usb-storage kernel module is not available" }
+    cis_fs_partition_rules:
+      "1.1.2.1.1": { target: "/tmp", check: "separate_partition", title: "Ensure /tmp is a separate partition" }
+      "1.1.2.1.2": { target: "/tmp", check: "option", option: "nodev", title: "Ensure nodev option set on /tmp partition" }
+      "1.1.2.1.3": { target: "/tmp", check: "option", option: "nosuid", title: "Ensure nosuid option set on /tmp partition" }
+      "1.1.2.1.4": { target: "/tmp", check: "option", option: "noexec", title: "Ensure noexec option set on /tmp partition" }
+      "1.1.2.2.1": { target: "/dev/shm", check: "separate_partition", title: "Ensure /dev/shm is a separate partition" }
+      "1.1.2.2.2": { target: "/dev/shm", check: "option", option: "nodev", title: "Ensure nodev option set on /dev/shm partition" }
+      "1.1.2.2.3": { target: "/dev/shm", check: "option", option: "nosuid", title: "Ensure nosuid option set on /dev/shm partition" }
+      "1.1.2.2.4": { target: "/dev/shm", check: "option", option: "noexec", title: "Ensure noexec option set on /dev/shm partition" }
+      "1.1.2.3.1": { target: "/home", check: "separate_partition", title: "Ensure separate partition exists for /home" }
+      "1.1.2.3.2": { target: "/home", check: "option", option: "nodev", title: "Ensure nodev option set on /home partition" }
+      "1.1.2.3.3": { target: "/home", check: "option", option: "nosuid", title: "Ensure nosuid option set on /home partition" }
+      "1.1.2.4.1": { target: "/var", check: "separate_partition", title: "Ensure separate partition exists for /var" }
+      "1.1.2.4.2": { target: "/var", check: "option", option: "nodev", title: "Ensure nodev option set on /var partition" }
+      "1.1.2.4.3": { target: "/var", check: "option", option: "nosuid", title: "Ensure nosuid option set on /var partition" }
+      "1.1.2.5.1": { target: "/var/tmp", check: "separate_partition", title: "Ensure separate partition exists for /var/tmp" }
+      "1.1.2.5.2": { target: "/var/tmp", check: "option", option: "nodev", title: "Ensure nodev option set on /var/tmp partition" }
+      "1.1.2.5.3": { target: "/var/tmp", check: "option", option: "nosuid", title: "Ensure nosuid option set on /var/tmp partition" }
+      "1.1.2.5.4": { target: "/var/tmp", check: "option", option: "noexec", title: "Ensure noexec option set on /var/tmp partition" }
+      "1.1.2.6.1": { target: "/var/log", check: "separate_partition", title: "Ensure separate partition exists for /var/log" }
+      "1.1.2.6.2": { target: "/var/log", check: "option", option: "nodev", title: "Ensure nodev option set on /var/log partition" }
+      "1.1.2.6.3": { target: "/var/log", check: "option", option: "nosuid", title: "Ensure nosuid option set on /var/log partition" }
+      "1.1.2.6.4": { target: "/var/log", check: "option", option: "noexec", title: "Ensure noexec option set on /var/log partition" }
+      "1.1.2.7.1": { target: "/var/log/audit", check: "separate_partition", title: "Ensure separate partition exists for /var/log/audit" }
+      "1.1.2.7.2": { target: "/var/log/audit", check: "option", option: "nodev", title: "Ensure nodev option set on /var/log/audit partition" }
+      "1.1.2.7.3": { target: "/var/log/audit", check: "option", option: "nosuid", title: "Ensure nosuid option set on /var/log/audit partition" }
+      "1.1.2.7.4": { target: "/var/log/audit", check: "option", option: "noexec", title: "Ensure noexec option set on /var/log/audit partition" }
+    cis_fs_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_unused_filesystems_kernel_modules_inventory"
+    - "MISSING_OT_BASELINE:approved_filesystem_partition_exception_register"
+  changed_when: false
+  tags: [cis, cis_1_1, filesystem, chapter_filesystem, astra, audit]
+
+- name: 1.1.1.1-1.1.1.9 | Collect kernel module disablement evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    module_name="{{ item.value.module }}"
+    echo "__MODPROBE__"
+    modprobe -n -v "${module_name}" 2>/dev/null || true
+    echo "__LSMOD__"
+    lsmod | awk '{print $1}' | grep -x "${module_name}" || true
+  loop: "{{ cis_fs_module_rules | dict2items }}"
+  register: cis_1_1_1_1_9_module_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_1_1, filesystem, chapter_filesystem, astra, audit]
+
+- name: 1.1.1.1-1.1.1.9 | Build module evidence and results
+  ansible.builtin.set_fact:
+    cis_fs_module_results_map: >-
+      {{
+        (cis_fs_module_results_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass' if (
+                  ((item.stdout | default('')) is search('(?m)^install\\s+\\S+\\s+(/bin/true|/bin/false)$'))
+                  and not ((item.stdout | default('')) is search('(?m)^__LSMOD__\\n\\S+'))
+                ) else 'fail'
+              ),
+              'reason': (
+                'Kernel module install is blocked and module is not loaded'
+                if (
+                  ((item.stdout | default('')) is search('(?m)^install\\s+\\S+\\s+(/bin/true|/bin/false)$'))
+                  and not ((item.stdout | default('')) is search('(?m)^__LSMOD__\\n\\S+'))
+                ) else 'Kernel module appears loadable or currently loaded'
+              ),
+              'evidence': {
+                'module': item.item.value.module,
+                'raw_output': (item.stdout | default('')),
+                'modprobe_output': ((item.stdout | regex_search('(?s)__MODPROBE__\\n(.*?)\\n__LSMOD__', '\\1') | first | default(''))),
+                'lsmod_match': ((item.stdout | regex_search('(?m)^__LSMOD__\\n(\\S+)$', '\\1') | first | default(''))),
+                'command': 'modprobe -n -v <module> && lsmod'
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_1_1_1_1_9_module_cmd.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_1_1_1, filesystem, chapter_filesystem, astra, audit]
+
+- name: 1.1.1.10 | Build manual-review result for unused filesystems kernel modules
+  ansible.builtin.set_fact:
+    cis_1_1_1_10_evidence:
+      reviewed_modules:
+      - cramfs
+      - freevxfs
+      - hfs
+      - hfsplus
+      - jffs2
+      - overlayfs
+      - squashfs
+      - udf
+      - usb-storage
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_unused_filesystems_kernel_modules_inventory"
+      rationale: "CIS marks this control manual because environment-specific unused filesystems list must be approved by OT owners."
+    cis_1_1_1_10_result:
+      control_id: "1.1.1.10"
+      title: "Ensure unused filesystems kernel modules are not available (Manual)"
+      status: "manual_review_required"
+      reason: "Approved inventory of environment-specific unused filesystem modules is required."
+  changed_when: false
+  tags: [cis, cis_1_1_1_10, filesystem, chapter_filesystem, astra, audit]
+
+- name: 1.1.2.* | Collect mount source and options for Filesystem partitions
+  ansible.builtin.command: "findmnt -kn {{ item.value.target }} -o SOURCE,OPTIONS"
+  loop: "{{ cis_fs_partition_rules | dict2items }}"
+  register: cis_1_1_2_mount_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_1_2, filesystem, chapter_filesystem, astra, audit]
+
+- name: 1.1.2.* | Build partition evidence and results
+  ansible.builtin.set_fact:
+    cis_fs_partition_results_map: >-
+      {{
+        (cis_fs_partition_results_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass'
+                if (
+                  (
+                    item.item.value.check == 'separate_partition'
+                    and ((item.stdout | default('') | trim | length) > 0)
+                  )
+                  or
+                  (
+                    item.item.value.check == 'option'
+                    and ((item.stdout | default('') | trim | length) > 0)
+                    and (
+                      item.item.value.option
+                      in
+                      (((item.stdout | default('') | trim).split(' ', 1) | length > 1) | ternary((item.stdout | default('') | trim).split(' ', 1)[1], '')).split(',')
+                    )
+                  )
+                ) else 'fail'
+              ),
+              'reason': (
+                'Required partition/mount option is present'
+                if (
+                  (
+                    item.item.value.check == 'separate_partition'
+                    and ((item.stdout | default('') | trim | length) > 0)
+                  )
+                  or
+                  (
+                    item.item.value.check == 'option'
+                    and ((item.stdout | default('') | trim | length) > 0)
+                    and (
+                      item.item.value.option
+                      in
+                      (((item.stdout | default('') | trim).split(' ', 1) | length > 1) | ternary((item.stdout | default('') | trim).split(' ', 1)[1], '')).split(',')
+                    )
+                  )
+                ) else 'Required partition/mount option is missing'
+              ),
+              'evidence': {
+                'target': item.item.value.target,
+                'check': item.item.value.check,
+                'required_option': (item.item.value.option | default('')),
+                'findmnt_stdout': (item.stdout | default('') | trim),
+                'source': (((item.stdout | default('') | trim).split(' ', 1) | first) | default('')),
+                'options': ((((item.stdout | default('') | trim).split(' ', 1) | length > 1) | ternary((item.stdout | default('') | trim).split(' ', 1)[1], '')).split(',')),
+                'command': 'findmnt -kn <target> -o SOURCE,OPTIONS',
+                'missing_information_placeholders': ['MISSING_OT_BASELINE:approved_filesystem_partition_exception_register']
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_1_1_2_mount_cmd.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_1_1_2, filesystem, chapter_filesystem, astra, audit]
+
+- name: Filesystem | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_filesystem_chapter_summary:
+      chapter_group: Filesystem
+      implemented_control_ids:
+      - 1.1.1.1
+      - 1.1.1.2
+      - 1.1.1.3
+      - 1.1.1.4
+      - 1.1.1.5
+      - 1.1.1.6
+      - 1.1.1.7
+      - 1.1.1.8
+      - 1.1.1.9
+      - 1.1.1.10
+      - 1.1.2.1.1
+      - 1.1.2.1.2
+      - 1.1.2.1.3
+      - 1.1.2.1.4
+      - 1.1.2.2.1
+      - 1.1.2.2.2
+      - 1.1.2.2.3
+      - 1.1.2.2.4
+      - 1.1.2.3.1
+      - 1.1.2.3.2
+      - 1.1.2.3.3
+      - 1.1.2.4.1
+      - 1.1.2.4.2
+      - 1.1.2.4.3
+      - 1.1.2.5.1
+      - 1.1.2.5.2
+      - 1.1.2.5.3
+      - 1.1.2.5.4
+      - 1.1.2.6.1
+      - 1.1.2.6.2
+      - 1.1.2.6.3
+      - 1.1.2.6.4
+      - 1.1.2.7.1
+      - 1.1.2.7.2
+      - 1.1.2.7.3
+      - 1.1.2.7.4
+      results: "{{ (cis_fs_module_results_map | default({})) | combine((cis_fs_partition_results_map | default({})), recursive=True) | combine({'1.1.1.10': cis_1_1_1_10_result}, recursive=True) }}"
+      evidence: "{{ (cis_fs_module_results_map | default({})) | dict2items | items2dict(key_name='key', value_name='value') | combine((cis_fs_partition_results_map | default({})) | dict2items | items2dict(key_name='key', value_name='value'), recursive=True) }}"
+      missing_information_placeholders: "{{ cis_fs_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_1_1, filesystem, chapter_filesystem, astra, audit]
+
+- name: Filesystem | Build evidence map in chapter summary
+  ansible.builtin.set_fact:
+    cis_filesystem_chapter_summary:
+      chapter_group: "{{ cis_filesystem_chapter_summary.chapter_group }}"
+      implemented_control_ids: "{{ cis_filesystem_chapter_summary.implemented_control_ids }}"
+      results: "{{ cis_filesystem_chapter_summary.results }}"
+      evidence:
+        "1.1.1.1": "{{ (cis_fs_module_results_map['1.1.1.1']).evidence }}"
+        "1.1.1.2": "{{ (cis_fs_module_results_map['1.1.1.2']).evidence }}"
+        "1.1.1.3": "{{ (cis_fs_module_results_map['1.1.1.3']).evidence }}"
+        "1.1.1.4": "{{ (cis_fs_module_results_map['1.1.1.4']).evidence }}"
+        "1.1.1.5": "{{ (cis_fs_module_results_map['1.1.1.5']).evidence }}"
+        "1.1.1.6": "{{ (cis_fs_module_results_map['1.1.1.6']).evidence }}"
+        "1.1.1.7": "{{ (cis_fs_module_results_map['1.1.1.7']).evidence }}"
+        "1.1.1.8": "{{ (cis_fs_module_results_map['1.1.1.8']).evidence }}"
+        "1.1.1.9": "{{ (cis_fs_module_results_map['1.1.1.9']).evidence }}"
+        "1.1.1.10": "{{ cis_1_1_1_10_evidence }}"
+        "1.1.2.1.1": "{{ (cis_fs_partition_results_map['1.1.2.1.1']).evidence }}"
+        "1.1.2.1.2": "{{ (cis_fs_partition_results_map['1.1.2.1.2']).evidence }}"
+        "1.1.2.1.3": "{{ (cis_fs_partition_results_map['1.1.2.1.3']).evidence }}"
+        "1.1.2.1.4": "{{ (cis_fs_partition_results_map['1.1.2.1.4']).evidence }}"
+        "1.1.2.2.1": "{{ (cis_fs_partition_results_map['1.1.2.2.1']).evidence }}"
+        "1.1.2.2.2": "{{ (cis_fs_partition_results_map['1.1.2.2.2']).evidence }}"
+        "1.1.2.2.3": "{{ (cis_fs_partition_results_map['1.1.2.2.3']).evidence }}"
+        "1.1.2.2.4": "{{ (cis_fs_partition_results_map['1.1.2.2.4']).evidence }}"
+        "1.1.2.3.1": "{{ (cis_fs_partition_results_map['1.1.2.3.1']).evidence }}"
+        "1.1.2.3.2": "{{ (cis_fs_partition_results_map['1.1.2.3.2']).evidence }}"
+        "1.1.2.3.3": "{{ (cis_fs_partition_results_map['1.1.2.3.3']).evidence }}"
+        "1.1.2.4.1": "{{ (cis_fs_partition_results_map['1.1.2.4.1']).evidence }}"
+        "1.1.2.4.2": "{{ (cis_fs_partition_results_map['1.1.2.4.2']).evidence }}"
+        "1.1.2.4.3": "{{ (cis_fs_partition_results_map['1.1.2.4.3']).evidence }}"
+        "1.1.2.5.1": "{{ (cis_fs_partition_results_map['1.1.2.5.1']).evidence }}"
+        "1.1.2.5.2": "{{ (cis_fs_partition_results_map['1.1.2.5.2']).evidence }}"
+        "1.1.2.5.3": "{{ (cis_fs_partition_results_map['1.1.2.5.3']).evidence }}"
+        "1.1.2.5.4": "{{ (cis_fs_partition_results_map['1.1.2.5.4']).evidence }}"
+        "1.1.2.6.1": "{{ (cis_fs_partition_results_map['1.1.2.6.1']).evidence }}"
+        "1.1.2.6.2": "{{ (cis_fs_partition_results_map['1.1.2.6.2']).evidence }}"
+        "1.1.2.6.3": "{{ (cis_fs_partition_results_map['1.1.2.6.3']).evidence }}"
+        "1.1.2.6.4": "{{ (cis_fs_partition_results_map['1.1.2.6.4']).evidence }}"
+        "1.1.2.7.1": "{{ (cis_fs_partition_results_map['1.1.2.7.1']).evidence }}"
+        "1.1.2.7.2": "{{ (cis_fs_partition_results_map['1.1.2.7.2']).evidence }}"
+        "1.1.2.7.3": "{{ (cis_fs_partition_results_map['1.1.2.7.3']).evidence }}"
+        "1.1.2.7.4": "{{ (cis_fs_partition_results_map['1.1.2.7.4']).evidence }}"
+      missing_information_placeholders: "{{ cis_filesystem_chapter_summary.missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_1_1, filesystem, chapter_filesystem, astra, audit]

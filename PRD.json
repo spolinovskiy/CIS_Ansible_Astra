@@ -1256,14 +1256,18 @@
         "ASTRA-0005",
         "ASTRA-3010"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Filesystem; detected 46 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/filesystem.yml",
+        "reports/lab/Filesystem/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T19:40:35Z",
+      "comments": "Implemented audit-only Filesystem controls from linux_cis.xlsx Filesystem sheet: 1.1.1.1-1.1.1.10 and 1.1.2.1.1-1.1.2.7.4 (36 control rows). Group-header scope rows are intentionally non-implementable and excluded. No remediation/restarts; explicit OT baseline placeholders retained."
     },
     {
       "task_id": "ASTRA-2011",
