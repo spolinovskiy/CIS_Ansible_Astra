@@ -30,3 +30,7 @@
 - name: Audit | Execute Passwords chapter controls
   ansible.builtin.include_tasks: passwords.yml
   tags: [cis, audit, astra, passwords, chapter_passwords]
+
+- name: Audit | Execute Root&System Accounts chapter controls
+  ansible.builtin.include_tasks: root_system_accounts.yml
+  tags: [cis, audit, astra, root_system_accounts, chapter_root_system_accounts]

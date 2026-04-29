@@ -1,0 +1,365 @@
+---
+- name: RootSystemAccounts | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_rsa_non_login_shells:
+    - /usr/sbin/nologin
+    - /sbin/nologin
+    - /bin/false
+    cis_rsa_root_path_whitelist:
+    - /usr/local/sbin
+    - /usr/local/bin
+    - /usr/sbin
+    - /usr/bin
+    - /sbin
+    - /bin
+    cis_rsa_default_shell_timeout_max: "{{ cis_rsa_default_shell_timeout_max | default(900) }}"
+    cis_rsa_default_umask_max: "{{ cis_rsa_default_umask_max | default('027') }}"
+    cis_rsa_root_umask_max: "{{ cis_rsa_root_umask_max | default('027') }}"
+    cis_rsa_root_path_exceptions: "{{ cis_rsa_root_path_exceptions | default([]) }}"
+    cis_rsa_system_account_shell_exceptions: "{{ cis_rsa_system_account_shell_exceptions | default([]) }}"
+    cis_rsa_locked_account_exceptions: "{{ cis_rsa_locked_account_exceptions | default([]) }}"
+    cis_rsa_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_root_path_exceptions"
+    - "MISSING_OT_BASELINE:approved_system_account_shell_exceptions"
+    - "MISSING_OT_BASELINE:approved_locked_account_exceptions"
+    - "MISSING_OT_BASELINE:approved_default_shell_timeout_max"
+    - "MISSING_OT_BASELINE:approved_default_umask_max"
+    - "MISSING_OT_BASELINE:approved_root_umask_max"
+  changed_when: false
+  tags: [cis, cis_5_4_2, cis_5_4_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.1-5.4.2.3 | Collect UID/GID 0 evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    {
+      echo "__UID0__"
+      awk -F: '($3 == 0){print $1":"$3}' /etc/passwd
+      echo "__PASSWD_GID0__"
+      awk -F: '($4 == 0){print $1":"$4}' /etc/passwd
+      echo "__GROUP_GID0__"
+      awk -F: '($3 == 0){print $1":"$3}' /etc/group
+    }
+  register: cis_5_4_2_1_3_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_1, cis_5_4_2_2, cis_5_4_2_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.1-5.4.2.3 | Parse UID/GID 0 evidence
+  ansible.builtin.set_fact:
+    cis_rsa_uid0_accounts: "{{ (cis_5_4_2_1_3_cmd.stdout | regex_search('(?s)__UID0__\\n(.*?)\\n__PASSWD_GID0__', '\\1') | first | default('') ).splitlines() | reject('equalto', '') | list }}"
+    cis_rsa_passwd_gid0_accounts: "{{ (cis_5_4_2_1_3_cmd.stdout | regex_search('(?s)__PASSWD_GID0__\\n(.*?)\\n__GROUP_GID0__', '\\1') | first | default('') ).splitlines() | reject('equalto', '') | list }}"
+    cis_rsa_group_gid0_groups: "{{ (cis_5_4_2_1_3_cmd.stdout | regex_search('(?s)__GROUP_GID0__\\n(.*)$', '\\1') | first | default('') ).splitlines() | reject('equalto', '') | list }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_1, cis_5_4_2_2, cis_5_4_2_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_1_evidence:
+      uid_0_accounts: "{{ cis_rsa_uid0_accounts }}"
+      command: "awk -F: '($3 == 0){print $1\":\"$3}' /etc/passwd"
+    cis_5_4_2_1_result:
+      control_id: "5.4.2.1"
+      title: "Ensure root is the only UID 0 account"
+      status: "{{ 'pass' if (cis_rsa_uid0_accounts | length == 1 and (cis_rsa_uid0_accounts[0] | regex_search('^root:0$'))) else 'fail' }}"
+      reason: "{{ 'Only root has UID 0' if (cis_rsa_uid0_accounts | length == 1 and (cis_rsa_uid0_accounts[0] | regex_search('^root:0$'))) else 'Non-root UID 0 account detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_1, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_2_evidence:
+      gid_0_accounts_in_passwd: "{{ cis_rsa_passwd_gid0_accounts }}"
+      command: "awk -F: '($4 == 0){print $1\":\"$4}' /etc/passwd"
+    cis_5_4_2_2_result:
+      control_id: "5.4.2.2"
+      title: "Ensure root is the only GID 0 account"
+      status: "{{ 'pass' if (cis_rsa_passwd_gid0_accounts | length == 1 and (cis_rsa_passwd_gid0_accounts[0] | regex_search('^root:0$'))) else 'fail' }}"
+      reason: "{{ 'Only root account uses GID 0 in passwd database' if (cis_rsa_passwd_gid0_accounts | length == 1 and (cis_rsa_passwd_gid0_accounts[0] | regex_search('^root:0$'))) else 'Non-root account with GID 0 detected in passwd database' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_2, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_3_evidence:
+      gid_0_groups: "{{ cis_rsa_group_gid0_groups }}"
+      command: "awk -F: '($3 == 0){print $1\":\"$3}' /etc/group"
+    cis_5_4_2_3_result:
+      control_id: "5.4.2.3"
+      title: "Ensure group root is the only GID 0 group"
+      status: "{{ 'pass' if (cis_rsa_group_gid0_groups | length == 1 and (cis_rsa_group_gid0_groups[0] | regex_search('^root:0$'))) else 'fail' }}"
+      reason: "{{ 'Only root group has GID 0' if (cis_rsa_group_gid0_groups | length == 1 and (cis_rsa_group_gid0_groups[0] | regex_search('^root:0$'))) else 'Non-root GID 0 group detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.4 | Collect root account access control evidence
+  ansible.builtin.command:
+    cmd: "awk -F: '($1==\"root\"){print $2\":\"$7}' /etc/shadow /etc/passwd"
+  register: cis_5_4_2_4_root_access_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_4, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_4_evidence:
+      root_shadow_and_shell_records: "{{ cis_5_4_2_4_root_access_cmd.stdout_lines }}"
+      command: "awk root account lock/shell evidence from passwd+shadow"
+    cis_5_4_2_4_result:
+      control_id: "5.4.2.4"
+      title: "Ensure root account access is controlled"
+      status: "{{ 'manual_review_required' if (cis_5_4_2_4_root_access_cmd.stdout_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'Root account access evidence collected; requires engineer policy confirmation' if (cis_5_4_2_4_root_access_cmd.stdout_lines | length) > 0 else 'Unable to collect root account access evidence' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_4, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.5 | Collect root PATH integrity evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    echo "${PATH}" | tr ':' '\n' | awk 'NF{print}'
+  register: cis_5_4_2_5_root_path_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_5, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.5 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_5_unapproved_root_path_entries: "{{ (cis_5_4_2_5_root_path_cmd.stdout_lines | default([])) | difference(cis_rsa_root_path_whitelist | default([]) + cis_rsa_root_path_exceptions | default([])) }}"
+    cis_5_4_2_5_evidence:
+      root_path_entries: "{{ cis_5_4_2_5_root_path_cmd.stdout_lines | default([]) }}"
+      approved_root_path_whitelist: "{{ cis_rsa_root_path_whitelist }}"
+      approved_root_path_exceptions: "{{ cis_rsa_root_path_exceptions }}"
+      unapproved_root_path_entries: "{{ (cis_5_4_2_5_root_path_cmd.stdout_lines | default([])) | difference(cis_rsa_root_path_whitelist | default([]) + cis_rsa_root_path_exceptions | default([])) }}"
+      command: "echo ${PATH} | tr ':' '\\n'"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_root_path_exceptions"]
+    cis_5_4_2_5_result:
+      control_id: "5.4.2.5"
+      title: "Ensure root path integrity"
+      status: "{{ 'pass' if ((cis_5_4_2_5_root_path_cmd.stdout_lines | default([])) | difference(cis_rsa_root_path_whitelist | default([]) + cis_rsa_root_path_exceptions | default([])) | length) == 0 else ('manual_review_required' if (cis_rsa_root_path_exceptions | length) == 0 else 'fail') }}"
+      reason: "{{ 'Root PATH entries match approved baseline' if ((cis_5_4_2_5_root_path_cmd.stdout_lines | default([])) | difference(cis_rsa_root_path_whitelist | default([]) + cis_rsa_root_path_exceptions | default([])) | length) == 0 else ('Root PATH contains non-whitelisted entries and approved exceptions baseline is missing' if (cis_rsa_root_path_exceptions | length) == 0 else 'Root PATH contains unapproved entries') }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_5, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.6 | Collect root umask evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E '^[[:space:]]*umask[[:space:]]+[0-9]{3,4}[[:space:]]*$' /root/.profile /root/.bashrc /etc/profile /etc/bash.bashrc /etc/profile.d/*.sh 2>/dev/null
+  register: cis_5_4_2_6_root_umask_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_6, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.6 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_6_detected_umasks: "{{ cis_5_4_2_6_root_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list }}"
+    cis_5_4_2_6_evidence:
+      root_umask_lines: "{{ cis_5_4_2_6_root_umask_cmd.stdout_lines | default([]) }}"
+      detected_umasks: "{{ cis_5_4_2_6_root_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list }}"
+      approved_root_umask_max: "{{ cis_rsa_root_umask_max }}"
+      command: "grep root/global shell profiles for umask"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_root_umask_max"]
+    cis_5_4_2_6_result:
+      control_id: "5.4.2.6"
+      title: "Ensure root user umask is configured"
+      status: "{{ 'manual_review_required' if ((cis_5_4_2_6_root_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'Root umask evidence collected; requires engineer baseline confirmation' if ((cis_5_4_2_6_root_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list | length) > 0) else 'No root umask evidence found in expected profile files' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_6, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.7 | Collect system account shell evidence
+  ansible.builtin.command:
+    cmd: "awk -F: '($3 < 1000 && $1 != \"root\"){print $1\":\"$3\":\"$7}' /etc/passwd"
+  register: cis_5_4_2_7_system_shell_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_7, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.7 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_7_noncompliant_system_shell_accounts: >-
+      {{
+        (cis_5_4_2_7_system_shell_cmd.stdout_lines | default([]))
+        | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$')
+        | list
+      }}
+    cis_5_4_2_7_unapproved_noncompliant_accounts: >-
+      {{
+        (
+          (cis_5_4_2_7_system_shell_cmd.stdout_lines | default([]))
+          | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$')
+          | list
+        ) | difference(cis_rsa_system_account_shell_exceptions | default([]))
+      }}
+    cis_5_4_2_7_evidence:
+      system_account_shell_entries: "{{ cis_5_4_2_7_system_shell_cmd.stdout_lines | default([]) }}"
+      noncompliant_system_account_shell_entries: >-
+        {{
+          (cis_5_4_2_7_system_shell_cmd.stdout_lines | default([]))
+          | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$')
+          | list
+        }}
+      approved_system_account_shell_exceptions: "{{ cis_rsa_system_account_shell_exceptions }}"
+      unapproved_noncompliant_system_account_shell_entries: >-
+        {{
+          (
+            (cis_5_4_2_7_system_shell_cmd.stdout_lines | default([]))
+            | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$')
+            | list
+          ) | difference(cis_rsa_system_account_shell_exceptions | default([]))
+        }}
+      command: "awk system accounts and login shell from /etc/passwd"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_system_account_shell_exceptions"]
+    cis_5_4_2_7_result:
+      control_id: "5.4.2.7"
+      title: "Ensure system accounts do not have a valid login shell"
+      status: "{{ 'pass' if (((cis_5_4_2_7_system_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$') | list | length) == 0) else ('manual_review_required' if (cis_rsa_system_account_shell_exceptions | length) == 0 else ('pass' if ((((cis_5_4_2_7_system_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$') | list) | difference(cis_rsa_system_account_shell_exceptions | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'All system accounts use non-login shells' if (((cis_5_4_2_7_system_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$') | list | length) == 0) else ('System accounts with valid login shell found; approved exception baseline is missing' if (cis_rsa_system_account_shell_exceptions | length) == 0 else ('System accounts with valid login shell are covered by approved exceptions' if ((((cis_5_4_2_7_system_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':.+:(/usr/sbin/nologin|/sbin/nologin|/bin/false)$') | list) | difference(cis_rsa_system_account_shell_exceptions | default([])) | length) == 0) else 'Unapproved system accounts with valid login shell found')) }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_7, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.8 | Collect locked state for accounts without valid login shell
+  ansible.builtin.shell: |
+    set -o pipefail
+    awk -F: '($7 ~ /(\/usr\/sbin\/nologin|\/sbin\/nologin|\/bin\/false)$/){print $1}' /etc/passwd | while read -r user; do
+      [ -n "$user" ] || continue
+      passwd -S "$user" 2>/dev/null | awk '{print $1":"$2}'
+    done
+  register: cis_5_4_2_8_locked_shell_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_2_8, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.2.8 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_2_8_not_locked_accounts: "{{ (cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list }}"
+    cis_5_4_2_8_unapproved_not_locked_accounts: "{{ ((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list) | difference(cis_rsa_locked_account_exceptions | default([])) }}"
+    cis_5_4_2_8_evidence:
+      shell_disabled_account_lock_states: "{{ cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([]) }}"
+      non_locked_shell_disabled_accounts: "{{ (cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list }}"
+      approved_locked_account_exceptions: "{{ cis_rsa_locked_account_exceptions }}"
+      unapproved_non_locked_shell_disabled_accounts: "{{ ((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list) | difference(cis_rsa_locked_account_exceptions | default([])) }}"
+      command: "passwd -S for accounts using nologin/false shells"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_locked_account_exceptions"]
+    cis_5_4_2_8_result:
+      control_id: "5.4.2.8"
+      title: "Ensure accounts without a valid login shell are locked"
+      status: "{{ 'pass' if ((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list | length) == 0 else ('manual_review_required' if (cis_rsa_locked_account_exceptions | length) == 0 else ('pass' if ((((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list) | difference(cis_rsa_locked_account_exceptions | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'All accounts with non-login shell are locked' if ((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list | length) == 0 else ('Unlocked non-login-shell accounts found; approved exception baseline is missing' if (cis_rsa_locked_account_exceptions | length) == 0 else ('Unlocked non-login-shell accounts are covered by approved exceptions' if ((((cis_5_4_2_8_locked_shell_cmd.stdout_lines | default([])) | reject('regex_search', ':[LK]$') | list) | difference(cis_rsa_locked_account_exceptions | default([])) | length) == 0) else 'Unapproved unlocked non-login-shell accounts found')) }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2_8, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.1 | Collect nologin entries in /etc/shells
+  ansible.builtin.shell: |
+    grep -E '(^|/)nologin$' /etc/shells 2>/dev/null
+  register: cis_5_4_3_1_nologin_shells_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_3_1, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_3_1_evidence:
+      nologin_shell_entries_in_etc_shells: "{{ cis_5_4_3_1_nologin_shells_cmd.stdout_lines | default([]) }}"
+      command: "grep nologin /etc/shells"
+    cis_5_4_3_1_result:
+      control_id: "5.4.3.1"
+      title: "Ensure nologin is not listed in /etc/shells"
+      status: "{{ 'pass' if (cis_5_4_3_1_nologin_shells_cmd.stdout_lines | default([]) | length) == 0 else 'fail' }}"
+      reason: "{{ 'nologin is not listed in /etc/shells' if (cis_5_4_3_1_nologin_shells_cmd.stdout_lines | default([]) | length) == 0 else 'nologin is listed in /etc/shells' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_3_1, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.2 | Collect default shell timeout evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E '^[[:space:]]*(readonly[[:space:]]+)?TMOUT=[0-9]+' /etc/profile /etc/bash.bashrc /etc/profile.d/*.sh 2>/dev/null
+  register: cis_5_4_3_2_timeout_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_3_2, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_3_2_detected_tmout_values: "{{ cis_5_4_3_2_timeout_cmd.stdout | regex_findall('(?m)\\bTMOUT=([0-9]+)\\b') | map('int') | list }}"
+    cis_5_4_3_2_evidence:
+      timeout_lines: "{{ cis_5_4_3_2_timeout_cmd.stdout_lines | default([]) }}"
+      detected_tmout_values: "{{ cis_5_4_3_2_timeout_cmd.stdout | regex_findall('(?m)\\bTMOUT=([0-9]+)\\b') | map('int') | list }}"
+      approved_tmout_max: "{{ cis_rsa_default_shell_timeout_max }}"
+      command: "grep TMOUT in global shell profile files"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_default_shell_timeout_max"]
+    cis_5_4_3_2_result:
+      control_id: "5.4.3.2"
+      title: "Ensure default user shell timeout is configured"
+      status: "{{ 'manual_review_required' if ((cis_5_4_3_2_timeout_cmd.stdout | regex_findall('(?m)\\bTMOUT=([0-9]+)\\b') | map('int') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'TMOUT evidence collected; requires engineer baseline confirmation' if ((cis_5_4_3_2_timeout_cmd.stdout | regex_findall('(?m)\\bTMOUT=([0-9]+)\\b') | map('int') | list | length) > 0) else 'No TMOUT setting evidence found in global shell profiles' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_3_2, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.3 | Collect default user umask evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E '^[[:space:]]*umask[[:space:]]+[0-9]{3,4}[[:space:]]*$' /etc/profile /etc/bash.bashrc /etc/profile.d/*.sh 2>/dev/null
+  register: cis_5_4_3_3_default_umask_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_4_3_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: 5.4.3.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_4_3_3_detected_umasks: "{{ cis_5_4_3_3_default_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list }}"
+    cis_5_4_3_3_evidence:
+      default_umask_lines: "{{ cis_5_4_3_3_default_umask_cmd.stdout_lines | default([]) }}"
+      detected_umasks: "{{ cis_5_4_3_3_default_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list }}"
+      approved_default_umask_max: "{{ cis_rsa_default_umask_max }}"
+      command: "grep umask in global shell profile files"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_default_umask_max"]
+    cis_5_4_3_3_result:
+      control_id: "5.4.3.3"
+      title: "Ensure default user umask is configured"
+      status: "{{ 'manual_review_required' if ((cis_5_4_3_3_default_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list | length) > 0) else 'fail' }}"
+      reason: "{{ 'Default umask evidence collected; requires engineer baseline confirmation' if ((cis_5_4_3_3_default_umask_cmd.stdout | regex_findall('(?m)\\bumask\\s+([0-9]{3,4})\\b') | list | length) > 0) else 'No default umask evidence found in global shell profiles' }}"
+  changed_when: false
+  tags: [cis, cis_5_4_3_3, root_system_accounts, chapter_root_system_accounts, astra, audit]
+
+- name: RootSystemAccounts | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_root_system_accounts_chapter_summary:
+      chapter_group: RootSystemAccounts
+      implemented_control_ids:
+      - 5.4.2.1
+      - 5.4.2.2
+      - 5.4.2.3
+      - 5.4.2.4
+      - 5.4.2.5
+      - 5.4.2.6
+      - 5.4.2.7
+      - 5.4.2.8
+      - 5.4.3.1
+      - 5.4.3.2
+      - 5.4.3.3
+      results:
+        "5.4.2.1": "{{ cis_5_4_2_1_result }}"
+        "5.4.2.2": "{{ cis_5_4_2_2_result }}"
+        "5.4.2.3": "{{ cis_5_4_2_3_result }}"
+        "5.4.2.4": "{{ cis_5_4_2_4_result }}"
+        "5.4.2.5": "{{ cis_5_4_2_5_result }}"
+        "5.4.2.6": "{{ cis_5_4_2_6_result }}"
+        "5.4.2.7": "{{ cis_5_4_2_7_result }}"
+        "5.4.2.8": "{{ cis_5_4_2_8_result }}"
+        "5.4.3.1": "{{ cis_5_4_3_1_result }}"
+        "5.4.3.2": "{{ cis_5_4_3_2_result }}"
+        "5.4.3.3": "{{ cis_5_4_3_3_result }}"
+      evidence:
+        "5.4.2.1": "{{ cis_5_4_2_1_evidence }}"
+        "5.4.2.2": "{{ cis_5_4_2_2_evidence }}"
+        "5.4.2.3": "{{ cis_5_4_2_3_evidence }}"
+        "5.4.2.4": "{{ cis_5_4_2_4_evidence }}"
+        "5.4.2.5": "{{ cis_5_4_2_5_evidence }}"
+        "5.4.2.6": "{{ cis_5_4_2_6_evidence }}"
+        "5.4.2.7": "{{ cis_5_4_2_7_evidence }}"
+        "5.4.2.8": "{{ cis_5_4_2_8_evidence }}"
+        "5.4.3.1": "{{ cis_5_4_3_1_evidence }}"
+        "5.4.3.2": "{{ cis_5_4_3_2_evidence }}"
+        "5.4.3.3": "{{ cis_5_4_3_3_evidence }}"
+      missing_information_placeholders: "{{ cis_rsa_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_5_4_2, cis_5_4_3, root_system_accounts, chapter_root_system_accounts, astra, audit]

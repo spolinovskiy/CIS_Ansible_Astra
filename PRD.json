@@ -1104,14 +1104,18 @@
         "ASTRA-0005",
         "ASTRA-3008"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Root&System Accounts; detected 13 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/root_system_accounts.yml",
+        "reports/lab/RootSystemAccounts/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T19:10:24Z",
+      "comments": "Implemented audit-only Root&System Accounts controls in scope from linux_cis.xlsx: 5.4.2.1-5.4.2.8 and 5.4.3.1-5.4.3.3. Group header rows 5.4.2 and 5.4.3 intentionally excluded from implementation. No remediation actions."
     },
     {
       "task_id": "ASTRA-2009",

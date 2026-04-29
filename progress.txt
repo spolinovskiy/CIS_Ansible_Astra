@@ -195,3 +195,11 @@
 - Created reports/lab/Passwords/chapter_report.md with required sections and mandatory engineer approval line.
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
 2026-04-29T11:00:00Z Passwords chapter workflow closure: added ASTRA-2008 review artifact, recorded ASTRA-3008 engineer approval state, and normalized ASTRA-1008 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
+[2026-04-29T19:10:24Z] ASTRA-1009 Implement audit-only CIS chapter/group Root&System Accounts for Astra Linux
+- Added Root&System Accounts chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/root_system_accounts.yml.
+- Implemented only linux_cis scoped Root&System Accounts control rows (5.4.2.1 through 5.4.2.8, and 5.4.3.1 through 5.4.3.3); excluded group headers 5.4.2 and 5.4.3.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_root_system_accounts_chapter_summary.
+- Added explicit OT-safe placeholders for approved root PATH exceptions, system-account-shell exceptions, locked-account exceptions, default shell timeout baseline, default umask baseline, and root umask baseline.
+- Created reports/lab/RootSystemAccounts/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
