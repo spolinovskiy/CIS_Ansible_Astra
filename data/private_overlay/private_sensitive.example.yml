@@ -1,0 +1,37 @@
+---
+# Copy this file outside git-tracked paths (recommended):
+#   ../private_data/<project>/<env>/private_sensitive.yml
+# or keep local untracked under:
+#   private_data/private_sensitive.yml
+#
+# Encrypt real content with ansible-vault:
+#   ansible-vault encrypt private_sensitive.yml --vault-id ot@prompt
+
+cis_private_overlay:
+  environment: "lab"
+  inventory_label: "astra_linux"
+
+  # Sensitive infrastructure data (examples only)
+  management_networks: []
+  bastion_hosts: []
+  monitored_hosts: []
+
+  # SSH/auth sensitive data
+  ssh_private_key_path: ""
+  ssh_known_hosts_file: ""
+  ssh_admin_users: []
+  ssh_allow_groups: []
+
+  # OT-specific approved baselines
+  approved_services: []
+  approved_ports: []
+  approved_cron_users: []
+  approved_at_users: []
+
+  # Optional host metadata model (universal/expandable)
+  host_catalog: []
+  # - hostname: ws001
+  #   role: workstation
+  #   zone: dmz
+  #   tags: ["scada", "ot", "critical"]
+  #   mgmt_ip: 10.0.0.10

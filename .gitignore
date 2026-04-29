@@ -1,0 +1,15 @@
+# Sensitive/private data overlays (never commit)
+private_data/
+secrets/
+vault/
+.vault_pass*
+*.vault_pass
+
+# Per-inventory sensitive vars
+inventories/*/group_vars/all/private_sensitive.yml
+inventories/*/group_vars/all/private_sensitive.vault.yml
+inventories/*/host_vars/*/private_sensitive.yml
+inventories/*/host_vars/*/private_sensitive.vault.yml
+
+# Optional local overrides
+*.local.yml

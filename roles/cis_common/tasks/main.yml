@@ -4,3 +4,37 @@
     file: "{{ playbook_dir }}/../data/os_map/supported_versions.yml"
     name: cis_supported_versions
   tags: [cis, common, astra]
+
+- name: Common | Build private overlay candidate file list
+  ansible.builtin.set_fact:
+    cis_private_overlay_candidates:
+    - "{{ lookup('ansible.builtin.env', 'CIS_PRIVATE_VARS_FILE') | default('', true) }}"
+    - "{{ playbook_dir }}/../private_data/private_sensitive.yml"
+    - "{{ playbook_dir }}/../private_data/private_sensitive.vault.yml"
+    - "{{ playbook_dir }}/../private_data/{{ inventory_dir | basename }}/private_sensitive.yml"
+    - "{{ playbook_dir }}/../private_data/{{ inventory_dir | basename }}/private_sensitive.vault.yml"
+  changed_when: false
+  tags: [cis, common, astra, private_data, offline]
+
+- name: Common | Resolve first available private overlay file
+  ansible.builtin.set_fact:
+    cis_private_overlay_file: "{{ lookup('ansible.builtin.first_found', cis_private_overlay_candidates, errors='ignore') }}"
+  changed_when: false
+  tags: [cis, common, astra, private_data, offline]
+
+- name: Common | Load private overlay vars when available
+  ansible.builtin.include_vars:
+    file: "{{ cis_private_overlay_file }}"
+    name: cis_private_overlay_loaded
+  when: cis_private_overlay_file is defined and (cis_private_overlay_file | length) > 0
+  changed_when: false
+  tags: [cis, common, astra, private_data, offline]
+
+- name: Common | Register private overlay status
+  ansible.builtin.set_fact:
+    cis_private_overlay_status:
+      loaded: "{{ (cis_private_overlay_file | default('') | length) > 0 }}"
+      source_file: "{{ cis_private_overlay_file | default('') }}"
+      note: "Sensitive data is expected from external/untracked overlay files; placeholders remain default when file is absent."
+  changed_when: false
+  tags: [cis, common, astra, private_data, offline]
