@@ -186,3 +186,11 @@
 - Created reports/lab/FilePermission/chapter_report.md with required sections and mandatory engineer approval line.
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
 2026-04-29T10:40:00Z FilePermission chapter workflow closure: added ASTRA-2007 review artifact, recorded ASTRA-3007 engineer approval state, and normalized ASTRA-1007 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
+[2026-04-29T19:03:25Z] ASTRA-1008 Implement audit-only CIS chapter/group Passwords for Astra Linux
+- Added Passwords chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/passwords.yml.
+- Implemented only linux_cis scoped Passwords control rows (5.4.1.1 through 5.4.1.6); excluded group headers and out-of-scope rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_passwords_chapter_summary.
+- Added explicit OT-safe placeholders for approved password aging thresholds, approved hashing algorithms, approved inactive lock threshold, and approved last-change exceptions.
+- Created reports/lab/Passwords/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.

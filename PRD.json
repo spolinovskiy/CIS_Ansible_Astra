@@ -1028,14 +1028,18 @@
         "ASTRA-0005",
         "ASTRA-3007"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Passwords; detected 8 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/passwords.yml",
+        "reports/lab/Passwords/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T19:03:25Z",
+      "comments": "Engineer-ready Passwords audit implementation completed for linux_cis scoped Passwords control rows only. Audit-only evidence/result records added per control with chapter summary fact. Explicit OT baseline placeholders retained for approved aging thresholds, hashing algorithms, inactive lock threshold, and last-change exception baseline."
     },
     {
       "task_id": "ASTRA-2008",
