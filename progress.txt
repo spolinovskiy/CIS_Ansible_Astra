@@ -177,3 +177,11 @@
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
 2026-04-29T10:10:00Z PRD scheduler normalization + private overlay model: marked approved implementation tasks as done to align with completed engineer-approval gates (ASTRA-1003/1004/1005 and ASTRA-3003), and implemented universal sensitive-data approach with gitignored private overlays, optional vault-ready file loading in cis_common, and documented strategy/templates for non-GitHub OT data.
 2026-04-29T10:20:00Z Local Users and Groups chapter workflow closure: added ASTRA-2006 review artifact, recorded ASTRA-3006 engineer approval state, and normalized ASTRA-1006 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
+[2026-04-29T18:49:51Z] ASTRA-1007 Implement audit-only CIS chapter/group FilePermission for Astra Linux
+- Added FilePermission chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/file_permission.yml.
+- Implemented only linux_cis scoped FilePermission control rows (7.1.1 through 7.1.13); excluded group headers and out-of-scope rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_file_permission_chapter_summary.
+- Added explicit OT-safe placeholders for approved world-writable path exceptions, approved unowned/ungrouped path exceptions, and approved SUID/SGID review allowlist.
+- Created reports/lab/FilePermission/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.

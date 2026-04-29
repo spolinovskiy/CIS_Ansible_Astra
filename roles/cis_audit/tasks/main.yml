@@ -22,3 +22,7 @@
 - name: Audit | Execute Local Users and Groups chapter controls
   ansible.builtin.include_tasks: local_users_groups.yml
   tags: [cis, audit, astra, local_users_groups, chapter_local_users_groups]
+
+- name: Audit | Execute FilePermission chapter controls
+  ansible.builtin.include_tasks: file_permission.yml
+  tags: [cis, audit, astra, file_permission, chapter_file_permission]

@@ -1,0 +1,211 @@
+---
+- name: FilePermission | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_fp_path_rules:
+      "7.1.1": { path: "/etc/passwd", owner: "root", group: "root", mode: "0644", title: "Ensure permissions on /etc/passwd are configured" }
+      "7.1.2": { path: "/etc/passwd-", owner: "root", group: "root", mode: "0644", title: "Ensure permissions on /etc/passwd- are configured" }
+      "7.1.3": { path: "/etc/group", owner: "root", group: "root", mode: "0644", title: "Ensure permissions on /etc/group are configured" }
+      "7.1.4": { path: "/etc/group-", owner: "root", group: "root", mode: "0644", title: "Ensure permissions on /etc/group- are configured" }
+      "7.1.5": { path: "/etc/shadow", owner: "root", group: "shadow", mode_max: 640, title: "Ensure permissions on /etc/shadow are configured" }
+      "7.1.6": { path: "/etc/shadow-", owner: "root", group: "shadow", mode_max: 640, title: "Ensure permissions on /etc/shadow- are configured" }
+      "7.1.7": { path: "/etc/gshadow", owner: "root", group: "shadow", mode_max: 640, title: "Ensure permissions on /etc/gshadow are configured" }
+      "7.1.8": { path: "/etc/gshadow-", owner: "root", group: "shadow", mode_max: 640, title: "Ensure permissions on /etc/gshadow- are configured" }
+      "7.1.9": { path: "/etc/shells", owner: "root", group: "root", mode: "0644", title: "Ensure permissions on /etc/shells are configured" }
+      "7.1.10": { path: "/etc/security/opasswd", owner: "root", group: "root", mode_max: 600, title: "Ensure permissions on /etc/security/opasswd are configured" }
+    cis_fp_world_writable_path_exceptions: "{{ cis_fp_world_writable_path_exceptions | default([]) }}"
+    cis_fp_unowned_ungrouped_path_exceptions: "{{ cis_fp_unowned_ungrouped_path_exceptions | default([]) }}"
+    cis_fp_suid_sgid_review_allowlist: "{{ cis_fp_suid_sgid_review_allowlist | default([]) }}"
+    cis_fp_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_world_writable_path_exceptions"
+    - "MISSING_OT_BASELINE:approved_unowned_ungrouped_path_exceptions"
+    - "MISSING_OT_BASELINE:approved_suid_sgid_review_allowlist"
+  changed_when: false
+  tags: [cis, cis_7_1, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.1-7.1.10 | Stat protected system files
+  ansible.builtin.stat:
+    path: "{{ item.value.path }}"
+  loop: "{{ cis_fp_path_rules | dict2items }}"
+  register: cis_7_1_1_10_stats
+  changed_when: false
+  tags: [cis, cis_7_1_1, cis_7_1_2, cis_7_1_3, cis_7_1_4, cis_7_1_5, cis_7_1_6, cis_7_1_7, cis_7_1_8, cis_7_1_9, cis_7_1_10, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.1-7.1.10 | Build protected file results map
+  ansible.builtin.set_fact:
+    cis_fp_result_map: >-
+      {{
+        (cis_fp_result_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass' if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == item.item.value.owner
+                  and (item.stat.gr_name | default('')) == item.item.value.group
+                  and (
+                    ((item.item.value.mode is defined) and (item.stat.mode | default('') == item.item.value.mode))
+                    or
+                    ((item.item.value.mode_max is defined) and ((item.stat.mode | default('999')) | int <= (item.item.value.mode_max | int)))
+                  )
+                ) else 'fail'
+              ),
+              'reason': (
+                'Ownership and mode constraints are satisfied'
+                if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == item.item.value.owner
+                  and (item.stat.gr_name | default('')) == item.item.value.group
+                  and (
+                    ((item.item.value.mode is defined) and (item.stat.mode | default('') == item.item.value.mode))
+                    or
+                    ((item.item.value.mode_max is defined) and ((item.stat.mode | default('999')) | int <= (item.item.value.mode_max | int)))
+                  )
+                ) else 'Ownership or mode constraints are not satisfied'
+              ),
+              'evidence': {
+                'path': item.item.value.path,
+                'exists': (item.stat.exists | default(false)),
+                'owner': (item.stat.pw_name | default('unknown')),
+                'group': (item.stat.gr_name | default('unknown')),
+                'mode': (item.stat.mode | default('unknown')),
+                'expected_owner': item.item.value.owner,
+                'expected_group': item.item.value.group,
+                'expected_mode': (item.item.value.mode | default('')),
+                'expected_mode_max': (item.item.value.mode_max | default(''))
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_7_1_1_10_stats.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_7_1_1, cis_7_1_2, cis_7_1_3, cis_7_1_4, cis_7_1_5, cis_7_1_6, cis_7_1_7, cis_7_1_8, cis_7_1_9, cis_7_1_10, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.11 | Collect world-writable files and directories
+  ansible.builtin.shell: |
+    set -o pipefail
+    find / -xdev \( -type f -o -type d \) -perm -0002 -print 2>/dev/null | sort -u
+  register: cis_7_1_11_world_writable_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_1_11, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.11 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_1_11_unapproved_world_writable: "{{ (cis_7_1_11_world_writable_cmd.stdout_lines | default([])) | difference(cis_fp_world_writable_path_exceptions | default([])) }}"
+    cis_7_1_11_evidence:
+      world_writable_paths: "{{ cis_7_1_11_world_writable_cmd.stdout_lines | default([]) }}"
+      approved_world_writable_path_exceptions: "{{ cis_fp_world_writable_path_exceptions }}"
+      unapproved_world_writable_paths: "{{ (cis_7_1_11_world_writable_cmd.stdout_lines | default([])) | difference(cis_fp_world_writable_path_exceptions | default([])) }}"
+      command: "find / -xdev (file|dir) perm -0002"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_world_writable_path_exceptions"]
+    cis_7_1_11_result:
+      control_id: "7.1.11"
+      title: "Ensure world writable files and directories are secured"
+      status: "{{ 'pass' if (cis_7_1_11_world_writable_cmd.stdout_lines | default([]) | length) == 0 else ('manual_review_required' if (cis_fp_world_writable_path_exceptions | length) == 0 else ('pass' if ((cis_7_1_11_world_writable_cmd.stdout_lines | default([])) | difference(cis_fp_world_writable_path_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No world-writable paths detected' if (cis_7_1_11_world_writable_cmd.stdout_lines | default([]) | length) == 0 else ('World-writable paths detected; approved exception baseline is missing' if (cis_fp_world_writable_path_exceptions | length) == 0 else ('World-writable paths are fully covered by approved exceptions' if ((cis_7_1_11_world_writable_cmd.stdout_lines | default([])) | difference(cis_fp_world_writable_path_exceptions | default([])) | length) == 0 else 'Unapproved world-writable paths detected')) }}"
+  changed_when: false
+  tags: [cis, cis_7_1_11, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.12 | Collect unowned/ungrouped files and directories
+  ansible.builtin.shell: |
+    set -o pipefail
+    find / -xdev \( -nouser -o -nogroup \) -print 2>/dev/null | sort -u
+  register: cis_7_1_12_unowned_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_1_12, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.12 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_1_12_unapproved_unowned: "{{ (cis_7_1_12_unowned_cmd.stdout_lines | default([])) | difference(cis_fp_unowned_ungrouped_path_exceptions | default([])) }}"
+    cis_7_1_12_evidence:
+      unowned_or_ungrouped_paths: "{{ cis_7_1_12_unowned_cmd.stdout_lines | default([]) }}"
+      approved_unowned_ungrouped_path_exceptions: "{{ cis_fp_unowned_ungrouped_path_exceptions }}"
+      unapproved_unowned_or_ungrouped_paths: "{{ (cis_7_1_12_unowned_cmd.stdout_lines | default([])) | difference(cis_fp_unowned_ungrouped_path_exceptions | default([])) }}"
+      command: "find / -xdev (nouser or nogroup)"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_unowned_ungrouped_path_exceptions"]
+    cis_7_1_12_result:
+      control_id: "7.1.12"
+      title: "Ensure no files or directories without an owner and a group exist"
+      status: "{{ 'pass' if (cis_7_1_12_unowned_cmd.stdout_lines | default([]) | length) == 0 else ('manual_review_required' if (cis_fp_unowned_ungrouped_path_exceptions | length) == 0 else ('pass' if ((cis_7_1_12_unowned_cmd.stdout_lines | default([])) | difference(cis_fp_unowned_ungrouped_path_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No unowned/ungrouped paths detected' if (cis_7_1_12_unowned_cmd.stdout_lines | default([]) | length) == 0 else ('Unowned/ungrouped paths detected; approved exception baseline is missing' if (cis_fp_unowned_ungrouped_path_exceptions | length) == 0 else ('Unowned/ungrouped paths are fully covered by approved exceptions' if ((cis_7_1_12_unowned_cmd.stdout_lines | default([])) | difference(cis_fp_unowned_ungrouped_path_exceptions | default([])) | length) == 0 else 'Unapproved unowned/ungrouped paths detected')) }}"
+  changed_when: false
+  tags: [cis, cis_7_1_12, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.13 | Collect SUID and SGID files
+  ansible.builtin.shell: |
+    set -o pipefail
+    find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -print 2>/dev/null | sort -u
+  register: cis_7_1_13_suid_sgid_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_1_13, file_permission, chapter_file_permission, astra, audit]
+
+- name: 7.1.13 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_1_13_unapproved_suid_sgid: "{{ (cis_7_1_13_suid_sgid_cmd.stdout_lines | default([])) | difference(cis_fp_suid_sgid_review_allowlist | default([])) }}"
+    cis_7_1_13_evidence:
+      suid_sgid_files: "{{ cis_7_1_13_suid_sgid_cmd.stdout_lines | default([]) }}"
+      approved_suid_sgid_review_allowlist: "{{ cis_fp_suid_sgid_review_allowlist }}"
+      unapproved_suid_sgid_files: "{{ (cis_7_1_13_suid_sgid_cmd.stdout_lines | default([])) | difference(cis_fp_suid_sgid_review_allowlist | default([])) }}"
+      command: "find / -xdev perm -4000 or -2000"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_suid_sgid_review_allowlist"]
+    cis_7_1_13_result:
+      control_id: "7.1.13"
+      title: "Ensure SUID and SGID files are reviewed (Manual)"
+      status: "{{ 'manual_review_required' if (cis_fp_suid_sgid_review_allowlist | length) == 0 else ('pass' if ((cis_7_1_13_suid_sgid_cmd.stdout_lines | default([])) | difference(cis_fp_suid_sgid_review_allowlist | default([])) | length) == 0 else 'manual_review_required') }}"
+      reason: "{{ 'SUID/SGID review baseline is missing' if (cis_fp_suid_sgid_review_allowlist | length) == 0 else ('SUID/SGID file set matches approved review allowlist' if ((cis_7_1_13_suid_sgid_cmd.stdout_lines | default([])) | difference(cis_fp_suid_sgid_review_allowlist | default([])) | length) == 0 else 'SUID/SGID files outside approved review allowlist require engineer review') }}"
+  changed_when: false
+  tags: [cis, cis_7_1_13, file_permission, chapter_file_permission, astra, audit]
+
+- name: FilePermission | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_file_permission_chapter_summary:
+      chapter_group: FilePermission
+      implemented_control_ids:
+      - 7.1.1
+      - 7.1.2
+      - 7.1.3
+      - 7.1.4
+      - 7.1.5
+      - 7.1.6
+      - 7.1.7
+      - 7.1.8
+      - 7.1.9
+      - 7.1.10
+      - 7.1.11
+      - 7.1.12
+      - 7.1.13
+      results:
+        "7.1.1": "{{ cis_fp_result_map['7.1.1'] }}"
+        "7.1.2": "{{ cis_fp_result_map['7.1.2'] }}"
+        "7.1.3": "{{ cis_fp_result_map['7.1.3'] }}"
+        "7.1.4": "{{ cis_fp_result_map['7.1.4'] }}"
+        "7.1.5": "{{ cis_fp_result_map['7.1.5'] }}"
+        "7.1.6": "{{ cis_fp_result_map['7.1.6'] }}"
+        "7.1.7": "{{ cis_fp_result_map['7.1.7'] }}"
+        "7.1.8": "{{ cis_fp_result_map['7.1.8'] }}"
+        "7.1.9": "{{ cis_fp_result_map['7.1.9'] }}"
+        "7.1.10": "{{ cis_fp_result_map['7.1.10'] }}"
+        "7.1.11": "{{ cis_7_1_11_result }}"
+        "7.1.12": "{{ cis_7_1_12_result }}"
+        "7.1.13": "{{ cis_7_1_13_result }}"
+      evidence:
+        "7.1.1": "{{ cis_fp_result_map['7.1.1'].evidence }}"
+        "7.1.2": "{{ cis_fp_result_map['7.1.2'].evidence }}"
+        "7.1.3": "{{ cis_fp_result_map['7.1.3'].evidence }}"
+        "7.1.4": "{{ cis_fp_result_map['7.1.4'].evidence }}"
+        "7.1.5": "{{ cis_fp_result_map['7.1.5'].evidence }}"
+        "7.1.6": "{{ cis_fp_result_map['7.1.6'].evidence }}"
+        "7.1.7": "{{ cis_fp_result_map['7.1.7'].evidence }}"
+        "7.1.8": "{{ cis_fp_result_map['7.1.8'].evidence }}"
+        "7.1.9": "{{ cis_fp_result_map['7.1.9'].evidence }}"
+        "7.1.10": "{{ cis_fp_result_map['7.1.10'].evidence }}"
+        "7.1.11": "{{ cis_7_1_11_evidence }}"
+        "7.1.12": "{{ cis_7_1_12_evidence }}"
+        "7.1.13": "{{ cis_7_1_13_evidence }}"
+      missing_information_placeholders: "{{ cis_fp_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_7_1, file_permission, chapter_file_permission, astra, audit]

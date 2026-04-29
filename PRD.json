@@ -949,14 +949,18 @@
         "ASTRA-0005",
         "ASTRA-3006"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet FilePermission; detected 14 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/file_permission.yml",
+        "reports/lab/FilePermission/chapter_report.md"
+      ],
+      "updated_at": "2026-04-29T18:49:51Z",
+      "comments": "Engineer-ready FilePermission audit implementation completed for linux_cis scoped FilePermission control rows only. Audit-only evidence/result records added per control with chapter summary fact. Explicit OT baseline placeholders retained for approved world-writable exceptions, unowned/ungrouped exceptions, and SUID/SGID review allowlist."
     },
     {
       "task_id": "ASTRA-2007",
