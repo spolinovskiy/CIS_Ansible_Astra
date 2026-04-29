@@ -1,0 +1,76 @@
+---
+- name: Bootloader | Define chapter defaults
+  ansible.builtin.set_fact:
+    cis_bootloader_grub_cfg_path: "/boot/grub/grub.cfg"
+  changed_when: false
+  tags: [cis, cis_1_4, bootloader, chapter_bootloader, astra, audit]
+
+- name: 1.4.1 | Audit bootloader superuser configuration
+  ansible.builtin.command:
+    cmd: grep "^set superusers" "{{ cis_bootloader_grub_cfg_path }}"
+  register: cis_1_4_1_superusers_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_4_1, bootloader, chapter_bootloader, astra, audit]
+
+- name: 1.4.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_1_4_1_evidence:
+      grub_cfg_path: "{{ cis_bootloader_grub_cfg_path }}"
+      superusers_lines: "{{ cis_1_4_1_superusers_cmd.stdout_lines }}"
+      command: "grep \"^set superusers\" /boot/grub/grub.cfg"
+      rc: "{{ cis_1_4_1_superusers_cmd.rc }}"
+    cis_1_4_1_result:
+      control_id: "1.4.1"
+      title: "Ensure bootloader password is set"
+      status: "{{ 'pass' if (cis_1_4_1_superusers_cmd.stdout_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'set superusers entry detected in grub.cfg' if (cis_1_4_1_superusers_cmd.stdout_lines | length) > 0 else 'set superusers entry not detected in grub.cfg' }}"
+  changed_when: false
+  tags: [cis, cis_1_4_1, bootloader, chapter_bootloader, astra, audit]
+
+- name: 1.4.2 | Audit access to bootloader configuration
+  ansible.builtin.command:
+    cmd: >-
+      stat -Lc "Access: (%#a/%A)  Uid: ( %u/ %U) Gid: ( %g/ %G)"
+      "{{ cis_bootloader_grub_cfg_path }}"
+  register: cis_1_4_2_grub_cfg_access_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_4_2, bootloader, chapter_bootloader, astra, audit]
+
+- name: 1.4.2 | Parse and evaluate bootloader access evidence
+  ansible.builtin.set_fact:
+    cis_1_4_2_access_mode: "{{ (cis_1_4_2_grub_cfg_access_cmd.stdout | regex_search('Access: \\((0?[0-9]{3,4})/', '\\1')) | first | default('') }}"
+    cis_1_4_2_access_uid: "{{ (cis_1_4_2_grub_cfg_access_cmd.stdout | regex_search('Uid: \\(\\s*([0-9]+)\\s*/', '\\1')) | first | default('') }}"
+    cis_1_4_2_access_gid: "{{ (cis_1_4_2_grub_cfg_access_cmd.stdout | regex_search('Gid: \\(\\s*([0-9]+)\\s*/', '\\1')) | first | default('') }}"
+  changed_when: false
+  tags: [cis, cis_1_4_2, bootloader, chapter_bootloader, astra, audit]
+
+- name: 1.4.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_1_4_2_evidence:
+      grub_cfg_path: "{{ cis_bootloader_grub_cfg_path }}"
+      stat_output: "{{ cis_1_4_2_grub_cfg_access_cmd.stdout }}"
+      parsed_mode: "{{ cis_1_4_2_access_mode }}"
+      parsed_uid: "{{ cis_1_4_2_access_uid }}"
+      parsed_gid: "{{ cis_1_4_2_access_gid }}"
+      command: "stat -Lc 'Access: (%#a/%A)  Uid: ( %u/ %U) Gid: ( %g/ %G)' /boot/grub/grub.cfg"
+      rc: "{{ cis_1_4_2_grub_cfg_access_cmd.rc }}"
+    cis_1_4_2_result:
+      control_id: "1.4.2"
+      title: "Ensure access to bootloader config is configured"
+      status: "{{ 'pass' if (cis_1_4_2_grub_cfg_access_cmd.rc == 0 and (cis_1_4_2_access_mode in ['0400', '400']) and cis_1_4_2_access_uid == '0' and cis_1_4_2_access_gid == '0') else 'fail' }}"
+      reason: "{{ 'grub.cfg ownership/mode match expected root:root and 0400' if (cis_1_4_2_grub_cfg_access_cmd.rc == 0 and (cis_1_4_2_access_mode in ['0400', '400']) and cis_1_4_2_access_uid == '0' and cis_1_4_2_access_gid == '0') else 'grub.cfg ownership/mode do not match expected root:root and 0400' }}"
+  changed_when: false
+  tags: [cis, cis_1_4_2, bootloader, chapter_bootloader, astra, audit]
+
+- name: Bootloader | Build chapter summary
+  ansible.builtin.set_fact:
+    cis_bootloader_chapter_summary:
+      chapter: Bootloader
+      controls_total: 2
+      controls:
+        - "{{ cis_1_4_1_result }}"
+        - "{{ cis_1_4_2_result }}"
+  changed_when: false
+  tags: [cis, cis_1_4, bootloader, chapter_bootloader, astra, audit]

@@ -1,0 +1,9 @@
+---
+- name: Precheck | Verify target distribution is Astra Linux family
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution is defined
+      - ansible_distribution | lower is search('astra')
+    fail_msg: "This independent project is for Astra Linux targets only."
+    success_msg: "Astra Linux target detected."
+  tags: [precheck, astra]

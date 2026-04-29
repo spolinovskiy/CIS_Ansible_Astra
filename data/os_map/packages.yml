@@ -1,0 +1,113 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+package_management:
+  family: debian_like
+  manager: apt
+  query_tool: dpkg-query
+  cache_tool: apt-cache
+  status: likely_but_unverified_for_astra
+  guards:
+    remediation_enabled:
+      default: false
+      required_for:
+      - any file change
+      - any package install or removal
+      - any service enable disable restart reload
+      - any bootloader update
+      - any sysctl persistence change
+    package_install_allowed:
+      default: false
+      required_for:
+      - installing missing packages
+      - updating packages
+      - removing packages
+    local_repository_defined:
+      default: false
+      required_for:
+      - apt package installation
+      - apt package upgrade
+      - apt package removal where package metadata is needed
+  notes: Astra is expected to use apt/dpkg, but package operations remain blocked until local repository details and approvals
+    are provided.
+package_sets:
+  sudo:
+  - name: sudo
+    status: candidate_untested
+  pam:
+  - name: libpam-modules
+    status: candidate_untested
+  - name: libpam-pwquality
+    status: candidate_untested
+  - name: libpam-runtime
+    status: candidate_untested
+  - name: libpam0g
+    status: candidate_untested
+  ssh_server:
+  - name: openssh-server
+    status: candidate_untested
+  cron_at:
+  - name: cron
+    status: candidate_untested
+  - name: at
+    status: candidate_untested
+  time_sync:
+  - name: chrony
+    status: candidate_untested
+  - name: systemd-timesyncd
+    status: unknown_unverified
+    notes: May be integrated with systemd or packaged separately.
+  logging:
+  - name: systemd
+    provides:
+    - systemd-journald
+    status: candidate_untested
+  - name: rsyslog
+    status: candidate_untested
+  - name: logrotate
+    status: candidate_untested
+  audit:
+  - name: auditd
+    status: candidate_untested
+  - name: audispd-plugins
+    status: unknown_unverified
+  bootloader:
+  - name: grub-pc
+    status: candidate_untested
+  - name: grub-efi-amd64
+    status: candidate_untested
+  filesystem_mount_sysctl:
+  - name: util-linux
+    status: candidate_untested
+  - name: procps
+    status: candidate_untested
+  kernel_modules:
+  - name: kmod
+    status: candidate_untested
+  package_controls:
+  - name: apt
+    status: candidate_untested
+  - name: gnupg
+    status: candidate_untested
+  - name: debian-archive-keyring
+    status: unknown_unverified
+package_operation_policy:
+  audit: allow read-only evidence collection when Astra distribution is detected and the version is candidate or unknown;
+    report version_status explicitly
+  remediation: block unless version is approved in required information and all remediation guards are true
+  package_install: block unless package_install_allowed, local_repository_defined, remediation_enabled, maintenance window,
+    and approval data are true

@@ -1,0 +1,509 @@
+---
+- name: PAM | Load Astra OS path map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/paths.yml"
+    name: cis_os_paths
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: PAM | Load Astra package map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/packages.yml"
+    name: cis_os_packages
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: PAM | Define chapter defaults
+  ansible.builtin.set_fact:
+    cis_pam_common_auth: "{{ cis_os_paths.paths.pam.common_auth | default('/etc/pam.d/common-auth') }}"
+    cis_pam_common_account: "{{ cis_os_paths.paths.pam.common_account | default('/etc/pam.d/common-account') }}"
+    cis_pam_common_password: "{{ cis_os_paths.paths.pam.common_password | default('/etc/pam.d/common-password') }}"
+    cis_pam_common_session: "{{ cis_os_paths.paths.pam.common_session | default('/etc/pam.d/common-session') }}"
+    cis_pam_faillock_conf: "{{ cis_os_paths.paths.pam.faillock_conf | default('/etc/security/faillock.conf') }}"
+    cis_pam_pwquality_conf: "{{ cis_os_paths.paths.pam.pwquality_conf | default('/etc/security/pwquality.conf') }}"
+    cis_pam_pwhistory_conf: "{{ cis_os_paths.paths.pam.pwhistory_conf | default('/etc/security/pwhistory.conf') }}"
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: PAM | Collect package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.1.1 | Collect installed pam package versions
+  ansible.builtin.shell: |
+    dpkg-query -W -f='${Package} ${Version}\n' 'pam' 'libpam0g' 2>/dev/null
+  register: cis_5_3_1_1_pam_versions_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_3_1_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.1.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_1_1_evidence:
+      installed_versions: "{{ cis_5_3_1_1_pam_versions_cmd.stdout_lines }}"
+      command: "dpkg-query -W -f='${Package} ${Version}' pam libpam0g"
+      note: "Latest-version comparison baseline is temporary/default and requires environment-approved package baseline."
+    cis_5_3_1_1_result:
+      control_id: "5.3.1.1"
+      title: "Ensure latest version of pam is installed"
+      status: "{{ 'manual_review_required' if (cis_5_3_1_1_pam_versions_cmd.stdout_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'PAM package detected; latest-version compliance requires environment-approved baseline' if (cis_5_3_1_1_pam_versions_cmd.stdout_lines | length) > 0 else 'PAM package version evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_1_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.1.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_1_2_evidence:
+      package_present: "{{ 'libpam-modules' in (ansible_facts.packages | default({})) }}"
+      package_versions: "{{ (ansible_facts.packages['libpam-modules'] | default([])) | map(attribute='version') | list }}"
+      source: package_facts
+    cis_5_3_1_2_result:
+      control_id: "5.3.1.2"
+      title: "Ensure libpam-modules is installed"
+      status: "{{ 'pass' if ('libpam-modules' in (ansible_facts.packages | default({}))) else 'fail' }}"
+      reason: "{{ 'libpam-modules package detected' if ('libpam-modules' in (ansible_facts.packages | default({}))) else 'libpam-modules package not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_1_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.1.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_1_3_evidence:
+      package_present: "{{ 'libpam-pwquality' in (ansible_facts.packages | default({})) }}"
+      package_versions: "{{ (ansible_facts.packages['libpam-pwquality'] | default([])) | map(attribute='version') | list }}"
+      source: package_facts
+    cis_5_3_1_3_result:
+      control_id: "5.3.1.3"
+      title: "Ensure libpam-pwquality is installed"
+      status: "{{ 'pass' if ('libpam-pwquality' in (ansible_facts.packages | default({}))) else 'fail' }}"
+      reason: "{{ 'libpam-pwquality package detected' if ('libpam-pwquality' in (ansible_facts.packages | default({}))) else 'libpam-pwquality package not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_1_3, pam, chapter_pam, astra, audit]
+
+- name: PAM | Collect module and argument evidence from PAM/config files
+  ansible.builtin.shell: |
+    grep -R -E -- '{{ item.pattern }}' {{ item.paths }} 2>/dev/null
+  loop:
+    - id: "5.3.2.1"
+      pattern: "^[[:space:]]*(auth|account|password|session)[[:space:]].*pam_unix\\.so"
+      paths: "{{ cis_pam_common_auth }} {{ cis_pam_common_account }} {{ cis_pam_common_password }} {{ cis_pam_common_session }}"
+    - id: "5.3.2.2"
+      pattern: "^[[:space:]]*(auth|account)[[:space:]].*pam_faillock\\.so"
+      paths: "{{ cis_pam_common_auth }} {{ cis_pam_common_account }}"
+    - id: "5.3.2.3"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_pwquality\\.so"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.2.4"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_pwhistory\\.so"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.1.1"
+      pattern: "(^|[[:space:]])deny[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_faillock_conf }} {{ cis_pam_common_auth }}"
+    - id: "5.3.3.1.2"
+      pattern: "(^|[[:space:]])unlock_time[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_faillock_conf }} {{ cis_pam_common_auth }}"
+    - id: "5.3.3.1.3"
+      pattern: "(^|[[:space:]])even_deny_root([[:space:]]|$)|(^|[[:space:]])root_unlock_time[[:space:]]*="
+      paths: "{{ cis_pam_faillock_conf }} {{ cis_pam_common_auth }}"
+    - id: "5.3.3.2.1"
+      pattern: "(^|[[:space:]])difok[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.2.2"
+      pattern: "(^|[[:space:]])minlen[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.2.3"
+      pattern: "(^|[[:space:]])(dcredit|ucredit|lcredit|ocredit)[[:space:]]*=[[:space:]]*-?[0-9]+"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.2.4"
+      pattern: "(^|[[:space:]])maxrepeat[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.2.5"
+      pattern: "(^|[[:space:]])maxsequence[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.2.6"
+      pattern: "(^|[[:space:]])dictcheck[[:space:]]*=[[:space:]]*1"
+      paths: "{{ cis_pam_pwquality_conf }}"
+    - id: "5.3.3.2.7"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_pwquality\\.so"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.2.8"
+      pattern: "(^|[[:space:]])enforce_for_root([[:space:]]|$)"
+      paths: "{{ cis_pam_pwquality_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.3.1"
+      pattern: "(^|[[:space:]])remember[[:space:]]*=[[:space:]]*[0-9]+"
+      paths: "{{ cis_pam_pwhistory_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.3.2"
+      pattern: "(^|[[:space:]])enforce_for_root([[:space:]]|$)"
+      paths: "{{ cis_pam_pwhistory_conf }} {{ cis_pam_common_password }}"
+    - id: "5.3.3.3.3"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_pwhistory\\.so.*\\buse_authtok\\b"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.4.1"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_unix\\.so"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.4.2"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_unix\\.so"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.4.3"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_unix\\.so.*\\b(yescrypt|sha512|sha256)\\b"
+      paths: "{{ cis_pam_common_password }}"
+    - id: "5.3.3.4.4"
+      pattern: "^[[:space:]]*password[[:space:]].*pam_unix\\.so.*\\buse_authtok\\b"
+      paths: "{{ cis_pam_common_password }}"
+  register: cis_pam_pattern_evidence_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: PAM | Build pattern evidence map
+  ansible.builtin.set_fact:
+    cis_pam_pattern_map: "{{ (cis_pam_pattern_map | default({})) | combine({item.item.id: {'matched_lines': item.stdout_lines, 'rc': item.rc, 'pattern': item.item.pattern, 'paths': item.item.paths }}) }}"
+  loop: "{{ cis_pam_pattern_evidence_cmd.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_2_1_evidence: "{{ cis_pam_pattern_map['5.3.2.1'] }}"
+    cis_5_3_2_1_result:
+      control_id: "5.3.2.1"
+      title: "Ensure pam_unix module is enabled"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.2.1'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_unix.so lines detected' if (cis_pam_pattern_map['5.3.2.1'].matched_lines | length) > 0 else 'pam_unix.so lines not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_2_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_2_2_evidence: "{{ cis_pam_pattern_map['5.3.2.2'] }}"
+    cis_5_3_2_2_result:
+      control_id: "5.3.2.2"
+      title: "Ensure pam_faillock module is enabled"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.2.2'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_faillock.so lines detected' if (cis_pam_pattern_map['5.3.2.2'].matched_lines | length) > 0 else 'pam_faillock.so lines not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_2_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.2.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_2_3_evidence: "{{ cis_pam_pattern_map['5.3.2.3'] }}"
+    cis_5_3_2_3_result:
+      control_id: "5.3.2.3"
+      title: "Ensure pam_pwquality module is enabled"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.2.3'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_pwquality.so lines detected' if (cis_pam_pattern_map['5.3.2.3'].matched_lines | length) > 0 else 'pam_pwquality.so lines not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_2_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.2.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_2_4_evidence: "{{ cis_pam_pattern_map['5.3.2.4'] }}"
+    cis_5_3_2_4_result:
+      control_id: "5.3.2.4"
+      title: "Ensure pam_pwhistory module is enabled"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.2.4'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_pwhistory.so lines detected' if (cis_pam_pattern_map['5.3.2.4'].matched_lines | length) > 0 else 'pam_pwhistory.so lines not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_2_4, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.1.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_1_1_evidence: "{{ cis_pam_pattern_map['5.3.3.1.1'] }}"
+    cis_5_3_3_1_1_result:
+      control_id: "5.3.3.1.1"
+      title: "Ensure password failed attempts lockout is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.1.1'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'deny setting evidence detected' if (cis_pam_pattern_map['5.3.3.1.1'].matched_lines | length) > 0 else 'deny setting evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_1_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.1.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_1_2_evidence: "{{ cis_pam_pattern_map['5.3.3.1.2'] }}"
+    cis_5_3_3_1_2_result:
+      control_id: "5.3.3.1.2"
+      title: "Ensure password unlock time is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.1.2'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'unlock_time evidence detected' if (cis_pam_pattern_map['5.3.3.1.2'].matched_lines | length) > 0 else 'unlock_time evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_1_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.1.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_1_3_evidence: "{{ cis_pam_pattern_map['5.3.3.1.3'] }}"
+    cis_5_3_3_1_3_result:
+      control_id: "5.3.3.1.3"
+      title: "Ensure password failed attempts lockout includes root account"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.1.3'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'root lockout evidence detected' if (cis_pam_pattern_map['5.3.3.1.3'].matched_lines | length) > 0 else 'root lockout evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_1_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_1_evidence: "{{ cis_pam_pattern_map['5.3.3.2.1'] }}"
+    cis_5_3_3_2_1_result:
+      control_id: "5.3.3.2.1"
+      title: "Ensure password number of changed characters is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.1'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'difok evidence detected' if (cis_pam_pattern_map['5.3.3.2.1'].matched_lines | length) > 0 else 'difok evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_2_evidence: "{{ cis_pam_pattern_map['5.3.3.2.2'] }}"
+    cis_5_3_3_2_2_result:
+      control_id: "5.3.3.2.2"
+      title: "Ensure minimum password length is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.2'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'minlen evidence detected' if (cis_pam_pattern_map['5.3.3.2.2'].matched_lines | length) > 0 else 'minlen evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_3_evidence: "{{ cis_pam_pattern_map['5.3.3.2.3'] }}"
+    cis_5_3_3_2_3_result:
+      control_id: "5.3.3.2.3"
+      title: "Ensure password complexity is configured (Manual)"
+      status: "{{ 'manual_review_required' if (cis_pam_pattern_map['5.3.3.2.3'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'Complexity parameters detected; threshold policy requires engineer-approved baseline' if (cis_pam_pattern_map['5.3.3.2.3'].matched_lines | length) > 0 else 'Complexity parameter evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_4_evidence: "{{ cis_pam_pattern_map['5.3.3.2.4'] }}"
+    cis_5_3_3_2_4_result:
+      control_id: "5.3.3.2.4"
+      title: "Ensure password same consecutive characters is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.4'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'maxrepeat evidence detected' if (cis_pam_pattern_map['5.3.3.2.4'].matched_lines | length) > 0 else 'maxrepeat evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_4, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.5 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_5_evidence: "{{ cis_pam_pattern_map['5.3.3.2.5'] }}"
+    cis_5_3_3_2_5_result:
+      control_id: "5.3.3.2.5"
+      title: "Ensure password maximum sequential characters is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.5'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'maxsequence evidence detected' if (cis_pam_pattern_map['5.3.3.2.5'].matched_lines | length) > 0 else 'maxsequence evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_5, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.6 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_6_evidence: "{{ cis_pam_pattern_map['5.3.3.2.6'] }}"
+    cis_5_3_3_2_6_result:
+      control_id: "5.3.3.2.6"
+      title: "Ensure password dictionary check is enabled"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.6'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'dictcheck=1 evidence detected' if (cis_pam_pattern_map['5.3.3.2.6'].matched_lines | length) > 0 else 'dictcheck=1 evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_6, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.7 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_7_evidence: "{{ cis_pam_pattern_map['5.3.3.2.7'] }}"
+    cis_5_3_3_2_7_result:
+      control_id: "5.3.3.2.7"
+      title: "Ensure password quality checking is enforced"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.7'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_pwquality.so enforcement line detected' if (cis_pam_pattern_map['5.3.3.2.7'].matched_lines | length) > 0 else 'pam_pwquality.so enforcement line not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_7, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.2.8 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_2_8_evidence: "{{ cis_pam_pattern_map['5.3.3.2.8'] }}"
+    cis_5_3_3_2_8_result:
+      control_id: "5.3.3.2.8"
+      title: "Ensure password quality is enforced for the root user"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.2.8'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'enforce_for_root evidence detected for pwquality' if (cis_pam_pattern_map['5.3.3.2.8'].matched_lines | length) > 0 else 'enforce_for_root evidence not detected for pwquality' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_2_8, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.3.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_3_1_evidence: "{{ cis_pam_pattern_map['5.3.3.3.1'] }}"
+    cis_5_3_3_3_1_result:
+      control_id: "5.3.3.3.1"
+      title: "Ensure password history remember is configured"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.3.1'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'remember evidence detected' if (cis_pam_pattern_map['5.3.3.3.1'].matched_lines | length) > 0 else 'remember evidence not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_3_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.3.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_3_2_evidence: "{{ cis_pam_pattern_map['5.3.3.3.2'] }}"
+    cis_5_3_3_3_2_result:
+      control_id: "5.3.3.3.2"
+      title: "Ensure password history is enforced for the root user"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.3.2'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'enforce_for_root evidence detected for pwhistory' if (cis_pam_pattern_map['5.3.3.3.2'].matched_lines | length) > 0 else 'enforce_for_root evidence not detected for pwhistory' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_3_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.3.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_3_3_evidence: "{{ cis_pam_pattern_map['5.3.3.3.3'] }}"
+    cis_5_3_3_3_3_result:
+      control_id: "5.3.3.3.3"
+      title: "Ensure pam_pwhistory includes use_authtok"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.3.3'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_pwhistory use_authtok line detected' if (cis_pam_pattern_map['5.3.3.3.3'].matched_lines | length) > 0 else 'pam_pwhistory use_authtok line not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_3_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.1 | Evaluate pam_unix nullok usage
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_1_nullok_lines: "{{ cis_pam_pattern_map['5.3.3.4.1'].matched_lines | select('regex_search', '\\bnullok\\b') | list }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_1_evidence:
+      pam_unix_password_lines: "{{ cis_pam_pattern_map['5.3.3.4.1'].matched_lines }}"
+      nullok_lines: "{{ cis_5_3_3_4_1_nullok_lines }}"
+      source_paths: "{{ cis_pam_pattern_map['5.3.3.4.1'].paths }}"
+    cis_5_3_3_4_1_result:
+      control_id: "5.3.3.4.1"
+      title: "Ensure pam_unix does not include nullok"
+      status: "{{ 'pass' if ((cis_pam_pattern_map['5.3.3.4.1'].matched_lines | length) > 0 and (cis_5_3_3_4_1_nullok_lines | length) == 0) else 'fail' }}"
+      reason: "{{ 'pam_unix password lines found without nullok' if ((cis_pam_pattern_map['5.3.3.4.1'].matched_lines | length) > 0 and (cis_5_3_3_4_1_nullok_lines | length) == 0) else 'pam_unix password line missing or contains nullok' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_1, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.2 | Evaluate pam_unix remember usage
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_2_remember_lines: "{{ cis_pam_pattern_map['5.3.3.4.2'].matched_lines | select('regex_search', '\\bremember=') | list }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_2_evidence:
+      pam_unix_password_lines: "{{ cis_pam_pattern_map['5.3.3.4.2'].matched_lines }}"
+      remember_lines: "{{ cis_5_3_3_4_2_remember_lines }}"
+      source_paths: "{{ cis_pam_pattern_map['5.3.3.4.2'].paths }}"
+    cis_5_3_3_4_2_result:
+      control_id: "5.3.3.4.2"
+      title: "Ensure pam_unix does not include remember"
+      status: "{{ 'pass' if ((cis_pam_pattern_map['5.3.3.4.2'].matched_lines | length) > 0 and (cis_5_3_3_4_2_remember_lines | length) == 0) else 'fail' }}"
+      reason: "{{ 'pam_unix password lines found without remember=' if ((cis_pam_pattern_map['5.3.3.4.2'].matched_lines | length) > 0 and (cis_5_3_3_4_2_remember_lines | length) == 0) else 'pam_unix password line missing or contains remember=' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_2, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_3_evidence: "{{ cis_pam_pattern_map['5.3.3.4.3'] }}"
+    cis_5_3_3_4_3_result:
+      control_id: "5.3.3.4.3"
+      title: "Ensure pam_unix includes a strong password hashing algorithm"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.4.3'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_unix strong hashing parameter detected' if (cis_pam_pattern_map['5.3.3.4.3'].matched_lines | length) > 0 else 'pam_unix strong hashing parameter not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_3, pam, chapter_pam, astra, audit]
+
+- name: 5.3.3.4.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_3_3_4_4_evidence: "{{ cis_pam_pattern_map['5.3.3.4.4'] }}"
+    cis_5_3_3_4_4_result:
+      control_id: "5.3.3.4.4"
+      title: "Ensure pam_unix includes use_authtok"
+      status: "{{ 'pass' if (cis_pam_pattern_map['5.3.3.4.4'].matched_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'pam_unix use_authtok line detected' if (cis_pam_pattern_map['5.3.3.4.4'].matched_lines | length) > 0 else 'pam_unix use_authtok line not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_3_3_4_4, pam, chapter_pam, astra, audit]
+
+- name: PAM | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_pam_chapter_summary:
+      chapter_group: PAM
+      implemented_control_ids:
+      - 5.3.1.1
+      - 5.3.1.2
+      - 5.3.1.3
+      - 5.3.2.1
+      - 5.3.2.2
+      - 5.3.2.3
+      - 5.3.2.4
+      - 5.3.3.1.1
+      - 5.3.3.1.2
+      - 5.3.3.1.3
+      - 5.3.3.2.1
+      - 5.3.3.2.2
+      - 5.3.3.2.3
+      - 5.3.3.2.4
+      - 5.3.3.2.5
+      - 5.3.3.2.6
+      - 5.3.3.2.7
+      - 5.3.3.2.8
+      - 5.3.3.3.1
+      - 5.3.3.3.2
+      - 5.3.3.3.3
+      - 5.3.3.4.1
+      - 5.3.3.4.2
+      - 5.3.3.4.3
+      - 5.3.3.4.4
+      results:
+        "5.3.1.1": "{{ cis_5_3_1_1_result }}"
+        "5.3.1.2": "{{ cis_5_3_1_2_result }}"
+        "5.3.1.3": "{{ cis_5_3_1_3_result }}"
+        "5.3.2.1": "{{ cis_5_3_2_1_result }}"
+        "5.3.2.2": "{{ cis_5_3_2_2_result }}"
+        "5.3.2.3": "{{ cis_5_3_2_3_result }}"
+        "5.3.2.4": "{{ cis_5_3_2_4_result }}"
+        "5.3.3.1.1": "{{ cis_5_3_3_1_1_result }}"
+        "5.3.3.1.2": "{{ cis_5_3_3_1_2_result }}"
+        "5.3.3.1.3": "{{ cis_5_3_3_1_3_result }}"
+        "5.3.3.2.1": "{{ cis_5_3_3_2_1_result }}"
+        "5.3.3.2.2": "{{ cis_5_3_3_2_2_result }}"
+        "5.3.3.2.3": "{{ cis_5_3_3_2_3_result }}"
+        "5.3.3.2.4": "{{ cis_5_3_3_2_4_result }}"
+        "5.3.3.2.5": "{{ cis_5_3_3_2_5_result }}"
+        "5.3.3.2.6": "{{ cis_5_3_3_2_6_result }}"
+        "5.3.3.2.7": "{{ cis_5_3_3_2_7_result }}"
+        "5.3.3.2.8": "{{ cis_5_3_3_2_8_result }}"
+        "5.3.3.3.1": "{{ cis_5_3_3_3_1_result }}"
+        "5.3.3.3.2": "{{ cis_5_3_3_3_2_result }}"
+        "5.3.3.3.3": "{{ cis_5_3_3_3_3_result }}"
+        "5.3.3.4.1": "{{ cis_5_3_3_4_1_result }}"
+        "5.3.3.4.2": "{{ cis_5_3_3_4_2_result }}"
+        "5.3.3.4.3": "{{ cis_5_3_3_4_3_result }}"
+        "5.3.3.4.4": "{{ cis_5_3_3_4_4_result }}"
+      evidence:
+        "5.3.1.1": "{{ cis_5_3_1_1_evidence }}"
+        "5.3.1.2": "{{ cis_5_3_1_2_evidence }}"
+        "5.3.1.3": "{{ cis_5_3_1_3_evidence }}"
+        "5.3.2.1": "{{ cis_5_3_2_1_evidence }}"
+        "5.3.2.2": "{{ cis_5_3_2_2_evidence }}"
+        "5.3.2.3": "{{ cis_5_3_2_3_evidence }}"
+        "5.3.2.4": "{{ cis_5_3_2_4_evidence }}"
+        "5.3.3.1.1": "{{ cis_5_3_3_1_1_evidence }}"
+        "5.3.3.1.2": "{{ cis_5_3_3_1_2_evidence }}"
+        "5.3.3.1.3": "{{ cis_5_3_3_1_3_evidence }}"
+        "5.3.3.2.1": "{{ cis_5_3_3_2_1_evidence }}"
+        "5.3.3.2.2": "{{ cis_5_3_3_2_2_evidence }}"
+        "5.3.3.2.3": "{{ cis_5_3_3_2_3_evidence }}"
+        "5.3.3.2.4": "{{ cis_5_3_3_2_4_evidence }}"
+        "5.3.3.2.5": "{{ cis_5_3_3_2_5_evidence }}"
+        "5.3.3.2.6": "{{ cis_5_3_3_2_6_evidence }}"
+        "5.3.3.2.7": "{{ cis_5_3_3_2_7_evidence }}"
+        "5.3.3.2.8": "{{ cis_5_3_3_2_8_evidence }}"
+        "5.3.3.3.1": "{{ cis_5_3_3_3_1_evidence }}"
+        "5.3.3.3.2": "{{ cis_5_3_3_3_2_evidence }}"
+        "5.3.3.3.3": "{{ cis_5_3_3_3_3_evidence }}"
+        "5.3.3.4.1": "{{ cis_5_3_3_4_1_evidence }}"
+        "5.3.3.4.2": "{{ cis_5_3_3_4_2_evidence }}"
+        "5.3.3.4.3": "{{ cis_5_3_3_4_3_evidence }}"
+        "5.3.3.4.4": "{{ cis_5_3_3_4_4_evidence }}"
+  changed_when: false
+  tags: [cis, cis_5_3, pam, chapter_pam, astra, audit]

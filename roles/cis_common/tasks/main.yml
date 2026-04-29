@@ -1,0 +1,6 @@
+---
+- name: Common | Load supported Astra version map placeholder
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/supported_versions.yml"
+    name: cis_supported_versions
+  tags: [cis, common, astra]

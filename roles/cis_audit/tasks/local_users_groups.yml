@@ -1,0 +1,304 @@
+---
+- name: LocalUsersAndGroups | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_lug_interactive_shell_regex: '^(\/bin\/(bash|sh|dash|ksh|zsh)|\/usr\/bin\/(bash|sh|zsh|ksh))$'
+    cis_lug_dotfile_allowed_modes:
+    - '600'
+    - '640'
+    - '644'
+    cis_lug_approved_duplicate_uid_exceptions: "{{ cis_lug_approved_duplicate_uid_exceptions | default([]) }}"
+    cis_lug_approved_duplicate_gid_exceptions: "{{ cis_lug_approved_duplicate_gid_exceptions | default([]) }}"
+    cis_lug_approved_duplicate_user_exceptions: "{{ cis_lug_approved_duplicate_user_exceptions | default([]) }}"
+    cis_lug_approved_duplicate_group_exceptions: "{{ cis_lug_approved_duplicate_group_exceptions | default([]) }}"
+    cis_lug_approved_nonlocal_home_exceptions: "{{ cis_lug_approved_nonlocal_home_exceptions | default([]) }}"
+    cis_lug_dotfile_exemptions: "{{ cis_lug_dotfile_exemptions | default([]) }}"
+    cis_lug_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_duplicate_uid_exceptions"
+    - "MISSING_OT_BASELINE:approved_duplicate_gid_exceptions"
+    - "MISSING_OT_BASELINE:approved_duplicate_user_exceptions"
+    - "MISSING_OT_BASELINE:approved_duplicate_group_exceptions"
+    - "MISSING_OT_BASELINE:approved_nonlocal_home_exceptions"
+    - "MISSING_OT_BASELINE:approved_dotfile_exemptions"
+  changed_when: false
+  tags: [cis, cis_7_2, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.1 | Collect passwd shadow marker evidence
+  ansible.builtin.command:
+    cmd: "awk -F: '($2!=\"x\"){print $1\":\"$2}' /etc/passwd"
+  register: cis_7_2_1_passwd_shadow_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_1, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_1_evidence:
+      non_shadowed_passwd_entries: "{{ cis_7_2_1_passwd_shadow_cmd.stdout_lines }}"
+      command: "awk -F: '($2!=\"x\"){print $1\":\"$2}' /etc/passwd"
+    cis_7_2_1_result:
+      control_id: "7.2.1"
+      title: "Ensure accounts in /etc/passwd use shadowed passwords"
+      status: "{{ 'pass' if (cis_7_2_1_passwd_shadow_cmd.stdout_lines | length) == 0 else 'fail' }}"
+      reason: "{{ 'All passwd entries use shadow marker x' if (cis_7_2_1_passwd_shadow_cmd.stdout_lines | length) == 0 else 'Non-shadowed passwd entries detected' }}"
+  changed_when: false
+  tags: [cis, cis_7_2_1, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.2 | Collect empty shadow password fields
+  ansible.builtin.command:
+    cmd: "awk -F: '($2==\"\"){print $1}' /etc/shadow"
+  register: cis_7_2_2_shadow_empty_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_2, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_2_evidence:
+      users_with_empty_shadow_password: "{{ cis_7_2_2_shadow_empty_cmd.stdout_lines }}"
+      command: "awk -F: '($2==\"\"){print $1}' /etc/shadow"
+    cis_7_2_2_result:
+      control_id: "7.2.2"
+      title: "Ensure /etc/shadow password fields are not empty"
+      status: "{{ 'pass' if (cis_7_2_2_shadow_empty_cmd.stdout_lines | length) == 0 else 'fail' }}"
+      reason: "{{ 'No empty password fields in shadow' if (cis_7_2_2_shadow_empty_cmd.stdout_lines | length) == 0 else 'Empty password fields detected in shadow' }}"
+  changed_when: false
+  tags: [cis, cis_7_2_2, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.3 | Collect passwd groups missing in /etc/group
+  ansible.builtin.shell: |
+    set -o pipefail
+    awk -F: '{print $1":"$4}' /etc/passwd | while IFS=: read -r user gid; do
+      getent group "$gid" >/dev/null || echo "$user:$gid"
+    done
+  register: cis_7_2_3_passwd_group_match_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_3, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_3_evidence:
+      missing_passwd_group_mappings: "{{ cis_7_2_3_passwd_group_match_cmd.stdout_lines }}"
+      command: "passwd gid to group existence check"
+    cis_7_2_3_result:
+      control_id: "7.2.3"
+      title: "Ensure all groups in /etc/passwd exist in /etc/group"
+      status: "{{ 'pass' if (cis_7_2_3_passwd_group_match_cmd.stdout_lines | length) == 0 else 'fail' }}"
+      reason: "{{ 'All passwd group IDs exist in group database' if (cis_7_2_3_passwd_group_match_cmd.stdout_lines | length) == 0 else 'passwd entries reference missing groups' }}"
+  changed_when: false
+  tags: [cis, cis_7_2_3, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.4 | Collect shadow group members
+  ansible.builtin.command:
+    cmd: "awk -F: '($1==\"shadow\"){print $4}' /etc/group"
+  register: cis_7_2_4_shadow_group_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_4, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_4_shadow_members: "{{ (cis_7_2_4_shadow_group_cmd.stdout | default('')).split(',') | map('trim') | reject('equalto','') | list }}"
+    cis_7_2_4_evidence:
+      shadow_group_members: "{{ (cis_7_2_4_shadow_group_cmd.stdout | default('')).split(',') | map('trim') | reject('equalto','') | list }}"
+      command: "awk -F: '($1==\"shadow\"){print $4}' /etc/group"
+    cis_7_2_4_result:
+      control_id: "7.2.4"
+      title: "Ensure shadow group is empty"
+      status: "{{ 'pass' if ((cis_7_2_4_shadow_group_cmd.stdout | default('')).split(',') | map('trim') | reject('equalto','') | list | length) == 0 else 'fail' }}"
+      reason: "{{ 'shadow group has no members' if ((cis_7_2_4_shadow_group_cmd.stdout | default('')).split(',') | map('trim') | reject('equalto','') | list | length) == 0 else 'shadow group contains members' }}"
+  changed_when: false
+  tags: [cis, cis_7_2_4, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.5-7.2.8 | Collect duplicate identifiers and names
+  ansible.builtin.shell: |
+    set -o pipefail
+    case "{{ item }}" in
+      uid) awk -F: '{print $3}' /etc/passwd | sort -n | uniq -d ;;
+      gid) awk -F: '{print $3}' /etc/group  | sort -n | uniq -d ;;
+      user) awk -F: '{print $1}' /etc/passwd | sort | uniq -d ;;
+      group) awk -F: '{print $1}' /etc/group | sort | uniq -d ;;
+    esac
+  loop: [uid, gid, user, group]
+  register: cis_7_2_5_8_dupes_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_5, cis_7_2_6, cis_7_2_7, cis_7_2_8, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.5-7.2.8 | Build duplicate maps
+  ansible.builtin.set_fact:
+    cis_lug_duplicate_map: "{{ (cis_lug_duplicate_map | default({})) | combine({item.item: item.stdout_lines}) }}"
+  loop: "{{ cis_7_2_5_8_dupes_cmd.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_5, cis_7_2_6, cis_7_2_7, cis_7_2_8, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.5 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_5_unapproved_duplicates: "{{ (cis_lug_duplicate_map.uid | default([])) | difference(cis_lug_approved_duplicate_uid_exceptions | default([])) }}"
+    cis_7_2_5_evidence:
+      duplicate_uids: "{{ cis_lug_duplicate_map.uid | default([]) }}"
+      approved_duplicate_uid_exceptions: "{{ cis_lug_approved_duplicate_uid_exceptions }}"
+      unapproved_duplicate_uids: "{{ (cis_lug_duplicate_map.uid | default([])) | difference(cis_lug_approved_duplicate_uid_exceptions | default([])) }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_duplicate_uid_exceptions"]
+    cis_7_2_5_result:
+      control_id: "7.2.5"
+      title: "Ensure no duplicate UIDs exist"
+      status: "{{ 'pass' if (cis_lug_duplicate_map.uid | default([]) | length) == 0 else ('manual_review_required' if (cis_lug_approved_duplicate_uid_exceptions | length) == 0 else ('pass' if ((cis_lug_duplicate_map.uid | default([])) | difference(cis_lug_approved_duplicate_uid_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No duplicate UIDs found' if (cis_lug_duplicate_map.uid | default([]) | length) == 0 else ('Duplicate UIDs found; approved exception baseline is missing' if (cis_lug_approved_duplicate_uid_exceptions | length) == 0 else ('Duplicate UIDs are fully covered by approved exceptions' if ((cis_lug_duplicate_map.uid | default([])) | difference(cis_lug_approved_duplicate_uid_exceptions | default([])) | length) == 0 else 'Unapproved duplicate UIDs found')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_5, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.6 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_6_unapproved_duplicates: "{{ (cis_lug_duplicate_map.gid | default([])) | difference(cis_lug_approved_duplicate_gid_exceptions | default([])) }}"
+    cis_7_2_6_evidence:
+      duplicate_gids: "{{ cis_lug_duplicate_map.gid | default([]) }}"
+      approved_duplicate_gid_exceptions: "{{ cis_lug_approved_duplicate_gid_exceptions }}"
+      unapproved_duplicate_gids: "{{ (cis_lug_duplicate_map.gid | default([])) | difference(cis_lug_approved_duplicate_gid_exceptions | default([])) }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_duplicate_gid_exceptions"]
+    cis_7_2_6_result:
+      control_id: "7.2.6"
+      title: "Ensure no duplicate GIDs exist"
+      status: "{{ 'pass' if (cis_lug_duplicate_map.gid | default([]) | length) == 0 else ('manual_review_required' if (cis_lug_approved_duplicate_gid_exceptions | length) == 0 else ('pass' if ((cis_lug_duplicate_map.gid | default([])) | difference(cis_lug_approved_duplicate_gid_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No duplicate GIDs found' if (cis_lug_duplicate_map.gid | default([]) | length) == 0 else ('Duplicate GIDs found; approved exception baseline is missing' if (cis_lug_approved_duplicate_gid_exceptions | length) == 0 else ('Duplicate GIDs are fully covered by approved exceptions' if ((cis_lug_duplicate_map.gid | default([])) | difference(cis_lug_approved_duplicate_gid_exceptions | default([])) | length) == 0 else 'Unapproved duplicate GIDs found')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_6, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.7 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_7_unapproved_duplicates: "{{ (cis_lug_duplicate_map.user | default([])) | difference(cis_lug_approved_duplicate_user_exceptions | default([])) }}"
+    cis_7_2_7_evidence:
+      duplicate_usernames: "{{ cis_lug_duplicate_map.user | default([]) }}"
+      approved_duplicate_user_exceptions: "{{ cis_lug_approved_duplicate_user_exceptions }}"
+      unapproved_duplicate_usernames: "{{ (cis_lug_duplicate_map.user | default([])) | difference(cis_lug_approved_duplicate_user_exceptions | default([])) }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_duplicate_user_exceptions"]
+    cis_7_2_7_result:
+      control_id: "7.2.7"
+      title: "Ensure no duplicate user names exist"
+      status: "{{ 'pass' if (cis_lug_duplicate_map.user | default([]) | length) == 0 else ('manual_review_required' if (cis_lug_approved_duplicate_user_exceptions | length) == 0 else ('pass' if ((cis_lug_duplicate_map.user | default([])) | difference(cis_lug_approved_duplicate_user_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No duplicate user names found' if (cis_lug_duplicate_map.user | default([]) | length) == 0 else ('Duplicate user names found; approved exception baseline is missing' if (cis_lug_approved_duplicate_user_exceptions | length) == 0 else ('Duplicate user names are fully covered by approved exceptions' if ((cis_lug_duplicate_map.user | default([])) | difference(cis_lug_approved_duplicate_user_exceptions | default([])) | length) == 0 else 'Unapproved duplicate user names found')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_7, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.8 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_8_unapproved_duplicates: "{{ (cis_lug_duplicate_map.group | default([])) | difference(cis_lug_approved_duplicate_group_exceptions | default([])) }}"
+    cis_7_2_8_evidence:
+      duplicate_group_names: "{{ cis_lug_duplicate_map.group | default([]) }}"
+      approved_duplicate_group_exceptions: "{{ cis_lug_approved_duplicate_group_exceptions }}"
+      unapproved_duplicate_group_names: "{{ (cis_lug_duplicate_map.group | default([])) | difference(cis_lug_approved_duplicate_group_exceptions | default([])) }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_duplicate_group_exceptions"]
+    cis_7_2_8_result:
+      control_id: "7.2.8"
+      title: "Ensure no duplicate group names exist"
+      status: "{{ 'pass' if (cis_lug_duplicate_map.group | default([]) | length) == 0 else ('manual_review_required' if (cis_lug_approved_duplicate_group_exceptions | length) == 0 else ('pass' if ((cis_lug_duplicate_map.group | default([])) | difference(cis_lug_approved_duplicate_group_exceptions | default([])) | length) == 0 else 'fail')) }}"
+      reason: "{{ 'No duplicate group names found' if (cis_lug_duplicate_map.group | default([]) | length) == 0 else ('Duplicate group names found; approved exception baseline is missing' if (cis_lug_approved_duplicate_group_exceptions | length) == 0 else ('Duplicate group names are fully covered by approved exceptions' if ((cis_lug_duplicate_map.group | default([])) | difference(cis_lug_approved_duplicate_group_exceptions | default([])) | length) == 0 else 'Unapproved duplicate group names found')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_8, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.9 | Collect interactive users and home directories
+  ansible.builtin.shell: |
+    set -o pipefail
+    awk -F: '$7 ~ /{{ cis_lug_interactive_shell_regex }}/ {print $1":"$6":"$7}' /etc/passwd
+  register: cis_7_2_9_interactive_homes_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_9, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.9 | Evaluate home directory existence
+  ansible.builtin.stat:
+    path: "{{ item.split(':')[1] }}"
+  loop: "{{ cis_7_2_9_interactive_homes_cmd.stdout_lines | default([]) }}"
+  register: cis_7_2_9_home_stats
+  changed_when: false
+  tags: [cis, cis_7_2_9, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.9 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_9_missing_homes: "{{ (cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list) }}"
+    cis_7_2_9_unapproved_missing_homes: "{{ ((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | difference(cis_lug_approved_nonlocal_home_exceptions | default([])) }}"
+    cis_7_2_9_evidence:
+      interactive_user_home_entries: "{{ cis_7_2_9_interactive_homes_cmd.stdout_lines | default([]) }}"
+      missing_home_entries: "{{ (cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list) }}"
+      approved_nonlocal_home_exceptions: "{{ cis_lug_approved_nonlocal_home_exceptions }}"
+      unapproved_missing_home_entries: "{{ ((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | difference(cis_lug_approved_nonlocal_home_exceptions | default([])) }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_nonlocal_home_exceptions"]
+    cis_7_2_9_result:
+      control_id: "7.2.9"
+      title: "Ensure local interactive user home directories are configured"
+      status: "{{ 'pass' if (((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | length) == 0 else ('manual_review_required' if (cis_lug_approved_nonlocal_home_exceptions | length) == 0 else ('pass' if ((((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | difference(cis_lug_approved_nonlocal_home_exceptions | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'All interactive user home directories exist' if (((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | length) == 0 else ('Missing home directories found; approved exception baseline is missing' if (cis_lug_approved_nonlocal_home_exceptions | length) == 0 else ('Missing home directories are covered by approved exceptions' if ((((cis_7_2_9_home_stats.results | default([])) | rejectattr('stat.exists', 'defined') | map(attribute='item') | list + ((cis_7_2_9_home_stats.results | default([])) | selectattr('stat.exists', 'defined') | rejectattr('stat.exists') | map(attribute='item') | list)) | difference(cis_lug_approved_nonlocal_home_exceptions | default([])) | length) == 0) else 'Unapproved missing home directories found')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_9, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.10 | Collect interactive users dot files permissions evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    awk -F: '$7 ~ /{{ cis_lug_interactive_shell_regex }}/ {print $6}' /etc/passwd | while read -r home; do
+      [ -d "$home" ] || continue
+      find "$home" -maxdepth 1 -type f -name '.*' -printf '%p|%m\n' 2>/dev/null
+    done
+  register: cis_7_2_10_dotfiles_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_7_2_10, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: 7.2.10 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_7_2_10_noncompliant_dotfiles: "{{ (cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list }}"
+    cis_7_2_10_unapproved_noncompliant_dotfiles: "{{ ((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list) | difference(cis_lug_dotfile_exemptions | default([])) }}"
+    cis_7_2_10_evidence:
+      dotfile_records: "{{ cis_7_2_10_dotfiles_cmd.stdout_lines | default([]) }}"
+      noncompliant_dotfiles: "{{ (cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list }}"
+      approved_dotfile_exemptions: "{{ cis_lug_dotfile_exemptions }}"
+      unapproved_noncompliant_dotfiles: "{{ ((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list) | difference(cis_lug_dotfile_exemptions | default([])) }}"
+      allowed_modes: "{{ cis_lug_dotfile_allowed_modes }}"
+      missing_information_placeholders: ["MISSING_OT_BASELINE:approved_dotfile_exemptions"]
+    cis_7_2_10_result:
+      control_id: "7.2.10"
+      title: "Ensure local interactive user dot files access is configured"
+      status: "{{ 'pass' if ((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list | length) == 0 else ('manual_review_required' if (cis_lug_dotfile_exemptions | length) == 0 else ('pass' if ((((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list) | difference(cis_lug_dotfile_exemptions | default([])) | length) == 0) else 'fail')) }}"
+      reason: "{{ 'No noncompliant interactive user dot files detected' if ((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list | length) == 0 else ('Noncompliant dot files detected; approved exemptions baseline is missing' if (cis_lug_dotfile_exemptions | length) == 0 else ('Noncompliant dot files are fully covered by approved exemptions' if ((((cis_7_2_10_dotfiles_cmd.stdout_lines | default([])) | reject('regex_search', '\\|(' + (cis_lug_dotfile_allowed_modes | join('|')) + ')$') | list) | difference(cis_lug_dotfile_exemptions | default([])) | length) == 0) else 'Unapproved noncompliant dot files detected')) }}"
+  changed_when: false
+  tags: [cis, cis_7_2_10, local_users_groups, chapter_local_users_groups, astra, audit]
+
+- name: LocalUsersAndGroups | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_local_users_groups_chapter_summary:
+      chapter_group: LocalUsersAndGroups
+      implemented_control_ids:
+      - 7.2.1
+      - 7.2.2
+      - 7.2.3
+      - 7.2.4
+      - 7.2.5
+      - 7.2.6
+      - 7.2.7
+      - 7.2.8
+      - 7.2.9
+      - 7.2.10
+      results:
+        "7.2.1": "{{ cis_7_2_1_result }}"
+        "7.2.2": "{{ cis_7_2_2_result }}"
+        "7.2.3": "{{ cis_7_2_3_result }}"
+        "7.2.4": "{{ cis_7_2_4_result }}"
+        "7.2.5": "{{ cis_7_2_5_result }}"
+        "7.2.6": "{{ cis_7_2_6_result }}"
+        "7.2.7": "{{ cis_7_2_7_result }}"
+        "7.2.8": "{{ cis_7_2_8_result }}"
+        "7.2.9": "{{ cis_7_2_9_result }}"
+        "7.2.10": "{{ cis_7_2_10_result }}"
+      evidence:
+        "7.2.1": "{{ cis_7_2_1_evidence }}"
+        "7.2.2": "{{ cis_7_2_2_evidence }}"
+        "7.2.3": "{{ cis_7_2_3_evidence }}"
+        "7.2.4": "{{ cis_7_2_4_evidence }}"
+        "7.2.5": "{{ cis_7_2_5_evidence }}"
+        "7.2.6": "{{ cis_7_2_6_evidence }}"
+        "7.2.7": "{{ cis_7_2_7_evidence }}"
+        "7.2.8": "{{ cis_7_2_8_evidence }}"
+        "7.2.9": "{{ cis_7_2_9_evidence }}"
+        "7.2.10": "{{ cis_7_2_10_evidence }}"
+      missing_information_placeholders: "{{ cis_lug_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_7_2, local_users_groups, chapter_local_users_groups, astra, audit]

@@ -1,0 +1,480 @@
+---
+- name: SSHD | Load Astra OS path map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/paths.yml"
+    name: cis_os_paths
+  changed_when: false
+  tags: [cis, cis_5_1, sshd, chapter_sshd, astra, audit]
+
+- name: SSHD | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_sshd_config_path: "{{ cis_os_paths.paths.sshd.config | default('/etc/ssh/sshd_config') }}"
+    cis_sshd_config_d_path: "{{ cis_os_paths.paths.sshd.config_d | default('/etc/ssh/sshd_config.d') }}"
+    cis_sshd_host_keys_glob: "{{ cis_os_paths.paths.sshd.host_keys_glob | default('/etc/ssh/ssh_host_*_key*') }}"
+    cis_sshd_approved_access_subnets: "{{ cis_sshd_approved_access_subnets | default([]) }}"
+    cis_sshd_approved_access_users: "{{ cis_sshd_approved_access_users | default([]) }}"
+    cis_sshd_approved_access_groups: "{{ cis_sshd_approved_access_groups | default([]) }}"
+    cis_sshd_approved_ciphers: "{{ cis_sshd_approved_ciphers | default([]) }}"
+    cis_sshd_approved_macs: "{{ cis_sshd_approved_macs | default([]) }}"
+    cis_sshd_approved_kex_algorithms: "{{ cis_sshd_approved_kex_algorithms | default([]) }}"
+    cis_sshd_approved_banner_text_source: "{{ cis_sshd_approved_banner_text_source | default('') }}"
+    cis_sshd_approved_idle_session_max_baseline:
+      client_alive_interval_max: "{{ cis_sshd_approved_idle_session_max_baseline.client_alive_interval_max | default(0) if (cis_sshd_approved_idle_session_max_baseline is defined) else 0 }}"
+      client_alive_count_max: "{{ cis_sshd_approved_idle_session_max_baseline.client_alive_count_max | default(0) if (cis_sshd_approved_idle_session_max_baseline is defined) else 0 }}"
+      login_grace_time_max: "{{ cis_sshd_approved_idle_session_max_baseline.login_grace_time_max | default(0) if (cis_sshd_approved_idle_session_max_baseline is defined) else 0 }}"
+      max_auth_tries_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max | default(0) if (cis_sshd_approved_idle_session_max_baseline is defined) else 0 }}"
+      max_sessions_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_sessions_max | default(0) if (cis_sshd_approved_idle_session_max_baseline is defined) else 0 }}"
+      max_startups_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_startups_max | default('') if (cis_sshd_approved_idle_session_max_baseline is defined) else '' }}"
+    cis_sshd_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_ssh_access_subnets"
+    - "MISSING_OT_BASELINE:approved_ssh_access_users"
+    - "MISSING_OT_BASELINE:approved_ssh_access_groups"
+    - "MISSING_OT_BASELINE:approved_sshd_ciphers"
+    - "MISSING_OT_BASELINE:approved_sshd_macs"
+    - "MISSING_OT_BASELINE:approved_sshd_kex_algorithms"
+    - "MISSING_OT_BASELINE:approved_banner_text_source"
+    - "MISSING_OT_BASELINE:approved_idle_session_max_settings"
+  changed_when: false
+  tags: [cis, cis_5_1, sshd, chapter_sshd, astra, audit]
+
+- name: SSHD | Collect effective sshd configuration
+  ansible.builtin.command: sshd -T
+  register: cis_sshd_t_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_1, sshd, chapter_sshd, astra, audit]
+
+- name: SSHD | Parse effective sshd configuration
+  ansible.builtin.set_fact:
+    cis_sshd_effective:
+      banner: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^banner\\s+(.+)$', '\\\\1') | first | default('')) | trim }}"
+      ciphers: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^ciphers\\s+(.+)$', '\\\\1') | first | default('')) | trim }}"
+      clientaliveinterval: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^clientaliveinterval\\s+([0-9]+)$', '\\\\1') | first | default('0')) | int }}"
+      clientalivecountmax: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^clientalivecountmax\\s+([0-9]+)$', '\\\\1') | first | default('0')) | int }}"
+      disableforwarding: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^disableforwarding\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      gssapiauthentication: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^gssapiauthentication\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      hostbasedauthentication: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^hostbasedauthentication\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      ignorerhosts: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^ignorerhosts\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      kexalgorithms: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^kexalgorithms\\s+(.+)$', '\\\\1') | first | default('')) | trim }}"
+      logingracetime: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^logingracetime\\s+([0-9]+)$', '\\\\1') | first | default('0')) | int }}"
+      loglevel: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^loglevel\\s+(.+)$', '\\\\1') | first | default('')) | upper | trim }}"
+      macs: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^macs\\s+(.+)$', '\\\\1') | first | default('')) | trim }}"
+      maxauthtries: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^maxauthtries\\s+([0-9]+)$', '\\\\1') | first | default('0')) | int }}"
+      maxsessions: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^maxsessions\\s+([0-9]+)$', '\\\\1') | first | default('0')) | int }}"
+      maxstartups: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^maxstartups\\s+([^\\n]+)$', '\\\\1') | first | default('')) | trim }}"
+      permitemptypasswords: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^permitemptypasswords\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      permitrootlogin: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^permitrootlogin\\s+(.+)$', '\\\\1') | first | default('')) | lower | trim }}"
+      permituserenvironment: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^permituserenvironment\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+      usepam: "{{ (cis_sshd_t_cmd.stdout | regex_search('(?m)^usepam\\s+(yes|no)$', '\\\\1') | first | default('')) | lower }}"
+  changed_when: false
+  tags: [cis, cis_5_1, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.1 | Stat sshd_config
+  ansible.builtin.stat:
+    path: "{{ cis_sshd_config_path }}"
+  register: cis_5_1_1_sshd_config_stat
+  changed_when: false
+  tags: [cis, cis_5_1_1, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_1_evidence:
+      path: "{{ cis_sshd_config_path }}"
+      exists: "{{ cis_5_1_1_sshd_config_stat.stat.exists | default(false) }}"
+      owner: "{{ cis_5_1_1_sshd_config_stat.stat.pw_name | default('unknown') }}"
+      group: "{{ cis_5_1_1_sshd_config_stat.stat.gr_name | default('unknown') }}"
+      mode: "{{ cis_5_1_1_sshd_config_stat.stat.mode | default('unknown') }}"
+      expected_owner: root
+      expected_group: root
+      expected_mode: "0600"
+    cis_5_1_1_result:
+      control_id: "5.1.1"
+      title: "Ensure permissions on /etc/ssh/sshd_config are configured"
+      status: "{{ 'pass' if (cis_5_1_1_sshd_config_stat.stat.exists | default(false) and cis_5_1_1_sshd_config_stat.stat.pw_name == 'root' and cis_5_1_1_sshd_config_stat.stat.gr_name == 'root' and cis_5_1_1_sshd_config_stat.stat.mode == '0600') else 'fail' }}"
+      reason: "{{ 'sshd_config ownership/mode match root:root 0600' if (cis_5_1_1_sshd_config_stat.stat.exists | default(false) and cis_5_1_1_sshd_config_stat.stat.pw_name == 'root' and cis_5_1_1_sshd_config_stat.stat.gr_name == 'root' and cis_5_1_1_sshd_config_stat.stat.mode == '0600') else 'sshd_config ownership/mode do not match root:root 0600' }}"
+  changed_when: false
+  tags: [cis, cis_5_1_1, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.2-5.1.3 | Collect SSH host key permission evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    for f in {{ cis_sshd_host_keys_glob }}; do
+      [ -e "$f" ] || continue
+      stat -Lc "%n|%a|%U|%G" "$f"
+    done
+  register: cis_5_1_2_5_1_3_hostkey_stat_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_1_2, cis_5_1_3, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.2-5.1.3 | Parse SSH host key evidence
+  ansible.builtin.set_fact:
+    cis_sshd_private_key_records: "{{ (cis_5_1_2_5_1_3_hostkey_stat_cmd.stdout_lines | default([])) | reject('regex_search', '\\\\.pub\\\\|') | list }}"
+    cis_sshd_public_key_records: "{{ (cis_5_1_2_5_1_3_hostkey_stat_cmd.stdout_lines | default([])) | select('regex_search', '\\\\.pub\\\\|') | list }}"
+    cis_sshd_private_key_noncompliant: "{{ (cis_5_1_2_5_1_3_hostkey_stat_cmd.stdout_lines | default([])) | reject('regex_search', '\\\\.pub\\\\|') | reject('regex_search', '\\\\|[0-5]?[0-9]{2}\\\\|root\\\\|root$') | list }}"
+    cis_sshd_public_key_noncompliant: "{{ (cis_5_1_2_5_1_3_hostkey_stat_cmd.stdout_lines | default([])) | select('regex_search', '\\\\.pub\\\\|') | reject('regex_search', '\\\\|[0-6]?[0-9]{2}\\\\|root\\\\|root$') | list }}"
+  changed_when: false
+  tags: [cis, cis_5_1_2, cis_5_1_3, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_2_evidence:
+      host_keys_glob: "{{ cis_sshd_host_keys_glob }}"
+      private_key_records: "{{ cis_sshd_private_key_records }}"
+      noncompliant_private_key_records: "{{ cis_sshd_private_key_noncompliant }}"
+      command: "stat -Lc '%n|%a|%U|%G' {{ cis_sshd_host_keys_glob }}"
+    cis_5_1_2_result:
+      control_id: "5.1.2"
+      title: "Ensure permissions on SSH private host key files are configured"
+      status: "{{ 'pass' if ((cis_sshd_private_key_records | length) > 0 and (cis_sshd_private_key_noncompliant | length) == 0) else 'fail' }}"
+      reason: "{{ 'Private SSH host keys are root:root and mode 0600 or more restrictive' if ((cis_sshd_private_key_records | length) > 0 and (cis_sshd_private_key_noncompliant | length) == 0) else 'Private SSH host keys missing or have noncompliant ownership/mode' }}"
+  changed_when: false
+  tags: [cis, cis_5_1_2, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_3_evidence:
+      host_keys_glob: "{{ cis_sshd_host_keys_glob }}"
+      public_key_records: "{{ cis_sshd_public_key_records }}"
+      noncompliant_public_key_records: "{{ cis_sshd_public_key_noncompliant }}"
+      command: "stat -Lc '%n|%a|%U|%G' {{ cis_sshd_host_keys_glob }}"
+    cis_5_1_3_result:
+      control_id: "5.1.3"
+      title: "Ensure permissions on SSH public host key files are configured"
+      status: "{{ 'pass' if ((cis_sshd_public_key_records | length) > 0 and (cis_sshd_public_key_noncompliant | length) == 0) else 'fail' }}"
+      reason: "{{ 'Public SSH host keys are root:root and mode 0644 or more restrictive' if ((cis_sshd_public_key_records | length) > 0 and (cis_sshd_public_key_noncompliant | length) == 0) else 'Public SSH host keys missing or have noncompliant ownership/mode' }}"
+  changed_when: false
+  tags: [cis, cis_5_1_3, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.4 | Collect access directives from sshd config
+  ansible.builtin.shell: |
+    grep -R -E -- '^[[:space:]]*(AllowUsers|DenyUsers|AllowGroups|DenyGroups)[[:space:]]+' "{{ cis_sshd_config_path }}" "{{ cis_sshd_config_d_path }}" 2>/dev/null
+  register: cis_5_1_4_access_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_1_4, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_4_evidence:
+      access_directives: "{{ cis_5_1_4_access_cmd.stdout_lines }}"
+      approved_access_subnets: "{{ cis_sshd_approved_access_subnets }}"
+      approved_access_users: "{{ cis_sshd_approved_access_users }}"
+      approved_access_groups: "{{ cis_sshd_approved_access_groups }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_ssh_access_subnets"
+      - "MISSING_OT_BASELINE:approved_ssh_access_users"
+      - "MISSING_OT_BASELINE:approved_ssh_access_groups"
+    cis_5_1_4_result:
+      control_id: "5.1.4"
+      title: "Ensure sshd access is configured"
+      status: >-
+        {% if (cis_5_1_4_access_cmd.stdout_lines | length) == 0 %}
+        fail
+        {% elif (cis_sshd_approved_access_subnets | length) == 0 and (cis_sshd_approved_access_users | length) == 0 and (cis_sshd_approved_access_groups | length) == 0 %}
+        manual_review_required
+        {% else %}
+        pass
+        {% endif %}
+      reason: >-
+        {% if (cis_5_1_4_access_cmd.stdout_lines | length) == 0 %}
+        No Allow/Deny access directives detected in sshd configuration.
+        {% elif (cis_sshd_approved_access_subnets | length) == 0 and (cis_sshd_approved_access_users | length) == 0 and (cis_sshd_approved_access_groups | length) == 0 %}
+        Access directives detected, but approved OT access baseline is not provided.
+        {% else %}
+        Access directives detected and OT access baseline placeholders are populated.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_4, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.5 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_5_banner_path: "{{ cis_sshd_effective.banner if (cis_sshd_effective.banner not in ['', 'none']) else '' }}"
+    cis_5_1_5_evidence:
+      effective_banner: "{{ cis_sshd_effective.banner }}"
+      approved_banner_text_source: "{{ cis_sshd_approved_banner_text_source }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_banner_text_source"
+    cis_5_1_5_result:
+      control_id: "5.1.5"
+      title: "Ensure sshd Banner is configured"
+      status: >-
+        {% if (cis_sshd_effective.banner | length) == 0 or (cis_sshd_effective.banner == 'none') %}
+        fail
+        {% elif (cis_sshd_approved_banner_text_source | length) == 0 %}
+        manual_review_required
+        {% else %}
+        pass
+        {% endif %}
+      reason: >-
+        {% if (cis_sshd_effective.banner | length) == 0 or (cis_sshd_effective.banner == 'none') %}
+        Effective SSH banner is not configured.
+        {% elif (cis_sshd_approved_banner_text_source | length) == 0 %}
+        Banner is configured but approved banner text source baseline is not provided.
+        {% else %}
+        Banner is configured and approved banner text source baseline is provided.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_5, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.5 | Stat banner file
+  ansible.builtin.stat:
+    path: "{{ cis_5_1_5_banner_path }}"
+  register: cis_5_1_5_banner_stat
+  changed_when: false
+  when: cis_5_1_5_banner_path | length > 0
+  tags: [cis, cis_5_1_5, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.5 | Append banner file evidence
+  ansible.builtin.set_fact:
+    cis_5_1_5_evidence: "{{ cis_5_1_5_evidence | combine({'banner_file_exists': (cis_5_1_5_banner_stat.stat.exists | default(false)), 'banner_file_mode': (cis_5_1_5_banner_stat.stat.mode | default('unknown'))}, recursive=True) }}"
+  changed_when: false
+  when: cis_5_1_5_banner_path | length > 0
+  tags: [cis, cis_5_1_5, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.6 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_6_effective_ciphers_list: "{{ (cis_sshd_effective.ciphers.split(',') if (cis_sshd_effective.ciphers | length) > 0 else []) | map('trim') | reject('equalto','') | list }}"
+    cis_5_1_6_unapproved_ciphers: "{{ (cis_sshd_effective.ciphers.split(',') if (cis_sshd_effective.ciphers | length) > 0 else []) | map('trim') | reject('equalto','') | list | difference(cis_sshd_approved_ciphers | default([])) }}"
+    cis_5_1_6_evidence:
+      effective_ciphers: "{{ cis_sshd_effective.ciphers }}"
+      approved_ciphers_baseline: "{{ cis_sshd_approved_ciphers }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_sshd_ciphers"
+    cis_5_1_6_result:
+      control_id: "5.1.6"
+      title: "Ensure sshd Ciphers are configured"
+      status: >-
+        {% if (cis_sshd_effective.ciphers | length) == 0 %}
+        fail
+        {% elif (cis_sshd_approved_ciphers | length) == 0 %}
+        manual_review_required
+        {% elif (cis_5_1_6_unapproved_ciphers | length) == 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_sshd_effective.ciphers | length) == 0 %}
+        Effective sshd ciphers are not configured.
+        {% elif (cis_sshd_approved_ciphers | length) == 0 %}
+        Effective sshd ciphers detected, but approved cipher baseline is missing.
+        {% elif (cis_5_1_6_unapproved_ciphers | length) == 0 %}
+        Effective sshd ciphers match approved baseline.
+        {% else %}
+        Effective sshd ciphers include values outside approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_6, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.7 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_7_evidence:
+      clientaliveinterval: "{{ cis_sshd_effective.clientaliveinterval }}"
+      clientalivecountmax: "{{ cis_sshd_effective.clientalivecountmax }}"
+      approved_idle_session_max_baseline: "{{ cis_sshd_approved_idle_session_max_baseline }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_idle_session_max_settings"
+    cis_5_1_7_result:
+      control_id: "5.1.7"
+      title: "Ensure sshd ClientAliveInterval and ClientAliveCountMax are configured"
+      status: >-
+        {% if cis_sshd_effective.clientaliveinterval <= 0 or cis_sshd_effective.clientalivecountmax <= 0 %}
+        fail
+        {% elif (cis_sshd_approved_idle_session_max_baseline.client_alive_interval_max | int) <= 0 or (cis_sshd_approved_idle_session_max_baseline.client_alive_count_max | int) <= 0 %}
+        manual_review_required
+        {% elif cis_sshd_effective.clientaliveinterval <= (cis_sshd_approved_idle_session_max_baseline.client_alive_interval_max | int) and cis_sshd_effective.clientalivecountmax <= (cis_sshd_approved_idle_session_max_baseline.client_alive_count_max | int) %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if cis_sshd_effective.clientaliveinterval <= 0 or cis_sshd_effective.clientalivecountmax <= 0 %}
+        ClientAliveInterval and/or ClientAliveCountMax are not safely configured.
+        {% elif (cis_sshd_approved_idle_session_max_baseline.client_alive_interval_max | int) <= 0 or (cis_sshd_approved_idle_session_max_baseline.client_alive_count_max | int) <= 0 %}
+        Approved idle/session baseline values are missing.
+        {% elif cis_sshd_effective.clientaliveinterval <= (cis_sshd_approved_idle_session_max_baseline.client_alive_interval_max | int) and cis_sshd_effective.clientalivecountmax <= (cis_sshd_approved_idle_session_max_baseline.client_alive_count_max | int) %}
+        Effective idle/session limits are within approved baseline.
+        {% else %}
+        Effective idle/session limits exceed approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_7, sshd, chapter_sshd, astra, audit]
+
+- name: SSHD | Build simple boolean control results
+  ansible.builtin.set_fact:
+    cis_5_1_8_evidence: { disableforwarding: "{{ cis_sshd_effective.disableforwarding }}" }
+    cis_5_1_8_result: { control_id: "5.1.8", title: "Ensure sshd DisableForwarding is enabled", status: "{{ 'pass' if cis_sshd_effective.disableforwarding == 'yes' else 'fail' }}", reason: "{{ 'disableforwarding is yes' if cis_sshd_effective.disableforwarding == 'yes' else 'disableforwarding is not yes' }}" }
+    cis_5_1_9_evidence: { gssapiauthentication: "{{ cis_sshd_effective.gssapiauthentication }}" }
+    cis_5_1_9_result: { control_id: "5.1.9", title: "Ensure sshd GSSAPIAuthentication is disabled", status: "{{ 'pass' if cis_sshd_effective.gssapiauthentication == 'no' else 'fail' }}", reason: "{{ 'gssapiauthentication is no' if cis_sshd_effective.gssapiauthentication == 'no' else 'gssapiauthentication is not no' }}" }
+    cis_5_1_10_evidence: { hostbasedauthentication: "{{ cis_sshd_effective.hostbasedauthentication }}" }
+    cis_5_1_10_result: { control_id: "5.1.10", title: "Ensure sshd HostbasedAuthentication is disabled", status: "{{ 'pass' if cis_sshd_effective.hostbasedauthentication == 'no' else 'fail' }}", reason: "{{ 'hostbasedauthentication is no' if cis_sshd_effective.hostbasedauthentication == 'no' else 'hostbasedauthentication is not no' }}" }
+    cis_5_1_11_evidence: { ignorerhosts: "{{ cis_sshd_effective.ignorerhosts }}" }
+    cis_5_1_11_result: { control_id: "5.1.11", title: "Ensure sshd IgnoreRhosts is enabled", status: "{{ 'pass' if cis_sshd_effective.ignorerhosts == 'yes' else 'fail' }}", reason: "{{ 'ignorerhosts is yes' if cis_sshd_effective.ignorerhosts == 'yes' else 'ignorerhosts is not yes' }}" }
+    cis_5_1_13_evidence: { logingracetime: "{{ cis_sshd_effective.logingracetime }}", approved_baseline: "{{ cis_sshd_approved_idle_session_max_baseline.login_grace_time_max }}", missing_information_placeholders: ["MISSING_OT_BASELINE:approved_idle_session_max_settings"] }
+    cis_5_1_13_result: { control_id: "5.1.13", title: "Ensure sshd LoginGraceTime is configured", status: "{{ 'fail' if cis_sshd_effective.logingracetime <= 0 else ('manual_review_required' if (cis_sshd_approved_idle_session_max_baseline.login_grace_time_max | int) <= 0 else ('pass' if cis_sshd_effective.logingracetime <= (cis_sshd_approved_idle_session_max_baseline.login_grace_time_max | int) else 'fail')) }}", reason: "{{ 'LoginGraceTime is not configured to a positive value' if cis_sshd_effective.logingracetime <= 0 else ('Approved LoginGraceTime baseline is missing' if (cis_sshd_approved_idle_session_max_baseline.login_grace_time_max | int) <= 0 else ('LoginGraceTime is within approved baseline' if cis_sshd_effective.logingracetime <= (cis_sshd_approved_idle_session_max_baseline.login_grace_time_max | int) else 'LoginGraceTime exceeds approved baseline')) }}" }
+    cis_5_1_14_evidence: { loglevel: "{{ cis_sshd_effective.loglevel }}" }
+    cis_5_1_14_result: { control_id: "5.1.14", title: "Ensure sshd LogLevel is configured", status: "{{ 'pass' if cis_sshd_effective.loglevel in ['VERBOSE', 'INFO'] else 'fail' }}", reason: "{{ 'LogLevel is set to INFO/VERBOSE' if cis_sshd_effective.loglevel in ['VERBOSE', 'INFO'] else 'LogLevel is not INFO/VERBOSE' }}" }
+    cis_5_1_16_evidence: { maxauthtries: "{{ cis_sshd_effective.maxauthtries }}", approved_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max }}", missing_information_placeholders: ["MISSING_OT_BASELINE:approved_idle_session_max_settings"] }
+    cis_5_1_16_result: { control_id: "5.1.16", title: "Ensure sshd MaxAuthTries is configured", status: "{{ 'fail' if cis_sshd_effective.maxauthtries <= 0 else ('manual_review_required' if (cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max | int) <= 0 else ('pass' if cis_sshd_effective.maxauthtries <= (cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max | int) else 'fail')) }}", reason: "{{ 'MaxAuthTries is not configured to a positive value' if cis_sshd_effective.maxauthtries <= 0 else ('Approved MaxAuthTries baseline is missing' if (cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max | int) <= 0 else ('MaxAuthTries is within approved baseline' if cis_sshd_effective.maxauthtries <= (cis_sshd_approved_idle_session_max_baseline.max_auth_tries_max | int) else 'MaxAuthTries exceeds approved baseline')) }}" }
+    cis_5_1_17_evidence: { maxsessions: "{{ cis_sshd_effective.maxsessions }}", approved_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_sessions_max }}", missing_information_placeholders: ["MISSING_OT_BASELINE:approved_idle_session_max_settings"] }
+    cis_5_1_17_result: { control_id: "5.1.17", title: "Ensure sshd MaxSessions is configured", status: "{{ 'fail' if cis_sshd_effective.maxsessions <= 0 else ('manual_review_required' if (cis_sshd_approved_idle_session_max_baseline.max_sessions_max | int) <= 0 else ('pass' if cis_sshd_effective.maxsessions <= (cis_sshd_approved_idle_session_max_baseline.max_sessions_max | int) else 'fail')) }}", reason: "{{ 'MaxSessions is not configured to a positive value' if cis_sshd_effective.maxsessions <= 0 else ('Approved MaxSessions baseline is missing' if (cis_sshd_approved_idle_session_max_baseline.max_sessions_max | int) <= 0 else ('MaxSessions is within approved baseline' if cis_sshd_effective.maxsessions <= (cis_sshd_approved_idle_session_max_baseline.max_sessions_max | int) else 'MaxSessions exceeds approved baseline')) }}" }
+    cis_5_1_18_evidence: { maxstartups: "{{ cis_sshd_effective.maxstartups }}", approved_max: "{{ cis_sshd_approved_idle_session_max_baseline.max_startups_max }}", missing_information_placeholders: ["MISSING_OT_BASELINE:approved_idle_session_max_settings"] }
+    cis_5_1_18_result: { control_id: "5.1.18", title: "Ensure sshd MaxStartups is configured", status: "{{ 'fail' if (cis_sshd_effective.maxstartups | length) == 0 else ('manual_review_required' if (cis_sshd_approved_idle_session_max_baseline.max_startups_max | length) == 0 else ('pass' if cis_sshd_effective.maxstartups == cis_sshd_approved_idle_session_max_baseline.max_startups_max else 'fail')) }}", reason: "{{ 'MaxStartups is not configured' if (cis_sshd_effective.maxstartups | length) == 0 else ('Approved MaxStartups baseline is missing' if (cis_sshd_approved_idle_session_max_baseline.max_startups_max | length) == 0 else ('MaxStartups matches approved baseline' if cis_sshd_effective.maxstartups == cis_sshd_approved_idle_session_max_baseline.max_startups_max else 'MaxStartups differs from approved baseline')) }}" }
+    cis_5_1_19_evidence: { permitemptypasswords: "{{ cis_sshd_effective.permitemptypasswords }}" }
+    cis_5_1_19_result: { control_id: "5.1.19", title: "Ensure sshd PermitEmptyPasswords is disabled", status: "{{ 'pass' if cis_sshd_effective.permitemptypasswords == 'no' else 'fail' }}", reason: "{{ 'permitemptypasswords is no' if cis_sshd_effective.permitemptypasswords == 'no' else 'permitemptypasswords is not no' }}" }
+    cis_5_1_20_evidence: { permitrootlogin: "{{ cis_sshd_effective.permitrootlogin }}" }
+    cis_5_1_20_result: { control_id: "5.1.20", title: "Ensure sshd PermitRootLogin is disabled", status: "{{ 'pass' if cis_sshd_effective.permitrootlogin in ['no'] else 'fail' }}", reason: "{{ 'permitrootlogin is no' if cis_sshd_effective.permitrootlogin in ['no'] else 'permitrootlogin is not no' }}" }
+    cis_5_1_21_evidence: { permituserenvironment: "{{ cis_sshd_effective.permituserenvironment }}" }
+    cis_5_1_21_result: { control_id: "5.1.21", title: "Ensure sshd PermitUserEnvironment is disabled", status: "{{ 'pass' if cis_sshd_effective.permituserenvironment == 'no' else 'fail' }}", reason: "{{ 'permituserenvironment is no' if cis_sshd_effective.permituserenvironment == 'no' else 'permituserenvironment is not no' }}" }
+    cis_5_1_22_evidence: { usepam: "{{ cis_sshd_effective.usepam }}" }
+    cis_5_1_22_result: { control_id: "5.1.22", title: "Ensure sshd UsePAM is enabled", status: "{{ 'pass' if cis_sshd_effective.usepam == 'yes' else 'fail' }}", reason: "{{ 'usepam is yes' if cis_sshd_effective.usepam == 'yes' else 'usepam is not yes' }}" }
+  changed_when: false
+  tags: [cis, cis_5_1_8, cis_5_1_9, cis_5_1_10, cis_5_1_11, cis_5_1_13, cis_5_1_14, cis_5_1_16, cis_5_1_17, cis_5_1_18, cis_5_1_19, cis_5_1_20, cis_5_1_21, cis_5_1_22, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.12 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_12_effective_kex_list: "{{ (cis_sshd_effective.kexalgorithms.split(',') if (cis_sshd_effective.kexalgorithms | length) > 0 else []) | map('trim') | reject('equalto','') | list }}"
+    cis_5_1_12_unapproved_kex: "{{ (cis_sshd_effective.kexalgorithms.split(',') if (cis_sshd_effective.kexalgorithms | length) > 0 else []) | map('trim') | reject('equalto','') | list | difference(cis_sshd_approved_kex_algorithms | default([])) }}"
+    cis_5_1_12_evidence:
+      effective_kexalgorithms: "{{ cis_sshd_effective.kexalgorithms }}"
+      approved_kex_baseline: "{{ cis_sshd_approved_kex_algorithms }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_sshd_kex_algorithms"
+    cis_5_1_12_result:
+      control_id: "5.1.12"
+      title: "Ensure sshd KexAlgorithms is configured"
+      status: >-
+        {% if (cis_sshd_effective.kexalgorithms | length) == 0 %}
+        fail
+        {% elif (cis_sshd_approved_kex_algorithms | length) == 0 %}
+        manual_review_required
+        {% elif (cis_5_1_12_unapproved_kex | length) == 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_sshd_effective.kexalgorithms | length) == 0 %}
+        Effective KexAlgorithms are not configured.
+        {% elif (cis_sshd_approved_kex_algorithms | length) == 0 %}
+        Effective KexAlgorithms detected, but approved KEX baseline is missing.
+        {% elif (cis_5_1_12_unapproved_kex | length) == 0 %}
+        Effective KexAlgorithms match approved baseline.
+        {% else %}
+        Effective KexAlgorithms include values outside approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_12, sshd, chapter_sshd, astra, audit]
+
+- name: 5.1.15 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_1_15_effective_macs_list: "{{ (cis_sshd_effective.macs.split(',') if (cis_sshd_effective.macs | length) > 0 else []) | map('trim') | reject('equalto','') | list }}"
+    cis_5_1_15_unapproved_macs: "{{ (cis_sshd_effective.macs.split(',') if (cis_sshd_effective.macs | length) > 0 else []) | map('trim') | reject('equalto','') | list | difference(cis_sshd_approved_macs | default([])) }}"
+    cis_5_1_15_evidence:
+      effective_macs: "{{ cis_sshd_effective.macs }}"
+      approved_macs_baseline: "{{ cis_sshd_approved_macs }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_sshd_macs"
+    cis_5_1_15_result:
+      control_id: "5.1.15"
+      title: "Ensure sshd MACs are configured"
+      status: >-
+        {% if (cis_sshd_effective.macs | length) == 0 %}
+        fail
+        {% elif (cis_sshd_approved_macs | length) == 0 %}
+        manual_review_required
+        {% elif (cis_5_1_15_unapproved_macs | length) == 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_sshd_effective.macs | length) == 0 %}
+        Effective MACs are not configured.
+        {% elif (cis_sshd_approved_macs | length) == 0 %}
+        Effective MACs detected, but approved MAC baseline is missing.
+        {% elif (cis_5_1_15_unapproved_macs | length) == 0 %}
+        Effective MACs match approved baseline.
+        {% else %}
+        Effective MACs include values outside approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_1_15, sshd, chapter_sshd, astra, audit]
+
+- name: SSHD | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_sshd_chapter_summary:
+      chapter_group: SSHD
+      implemented_control_ids:
+      - 5.1.1
+      - 5.1.2
+      - 5.1.3
+      - 5.1.4
+      - 5.1.5
+      - 5.1.6
+      - 5.1.7
+      - 5.1.8
+      - 5.1.9
+      - 5.1.10
+      - 5.1.11
+      - 5.1.12
+      - 5.1.13
+      - 5.1.14
+      - 5.1.15
+      - 5.1.16
+      - 5.1.17
+      - 5.1.18
+      - 5.1.19
+      - 5.1.20
+      - 5.1.21
+      - 5.1.22
+      results:
+        "5.1.1": "{{ cis_5_1_1_result }}"
+        "5.1.2": "{{ cis_5_1_2_result }}"
+        "5.1.3": "{{ cis_5_1_3_result }}"
+        "5.1.4": "{{ cis_5_1_4_result }}"
+        "5.1.5": "{{ cis_5_1_5_result }}"
+        "5.1.6": "{{ cis_5_1_6_result }}"
+        "5.1.7": "{{ cis_5_1_7_result }}"
+        "5.1.8": "{{ cis_5_1_8_result }}"
+        "5.1.9": "{{ cis_5_1_9_result }}"
+        "5.1.10": "{{ cis_5_1_10_result }}"
+        "5.1.11": "{{ cis_5_1_11_result }}"
+        "5.1.12": "{{ cis_5_1_12_result }}"
+        "5.1.13": "{{ cis_5_1_13_result }}"
+        "5.1.14": "{{ cis_5_1_14_result }}"
+        "5.1.15": "{{ cis_5_1_15_result }}"
+        "5.1.16": "{{ cis_5_1_16_result }}"
+        "5.1.17": "{{ cis_5_1_17_result }}"
+        "5.1.18": "{{ cis_5_1_18_result }}"
+        "5.1.19": "{{ cis_5_1_19_result }}"
+        "5.1.20": "{{ cis_5_1_20_result }}"
+        "5.1.21": "{{ cis_5_1_21_result }}"
+        "5.1.22": "{{ cis_5_1_22_result }}"
+      evidence:
+        "5.1.1": "{{ cis_5_1_1_evidence }}"
+        "5.1.2": "{{ cis_5_1_2_evidence }}"
+        "5.1.3": "{{ cis_5_1_3_evidence }}"
+        "5.1.4": "{{ cis_5_1_4_evidence }}"
+        "5.1.5": "{{ cis_5_1_5_evidence }}"
+        "5.1.6": "{{ cis_5_1_6_evidence }}"
+        "5.1.7": "{{ cis_5_1_7_evidence }}"
+        "5.1.8": "{{ cis_5_1_8_evidence }}"
+        "5.1.9": "{{ cis_5_1_9_evidence }}"
+        "5.1.10": "{{ cis_5_1_10_evidence }}"
+        "5.1.11": "{{ cis_5_1_11_evidence }}"
+        "5.1.12": "{{ cis_5_1_12_evidence }}"
+        "5.1.13": "{{ cis_5_1_13_evidence }}"
+        "5.1.14": "{{ cis_5_1_14_evidence }}"
+        "5.1.15": "{{ cis_5_1_15_evidence }}"
+        "5.1.16": "{{ cis_5_1_16_evidence }}"
+        "5.1.17": "{{ cis_5_1_17_evidence }}"
+        "5.1.18": "{{ cis_5_1_18_evidence }}"
+        "5.1.19": "{{ cis_5_1_19_evidence }}"
+        "5.1.20": "{{ cis_5_1_20_evidence }}"
+        "5.1.21": "{{ cis_5_1_21_evidence }}"
+        "5.1.22": "{{ cis_5_1_22_evidence }}"
+      missing_information_placeholders: "{{ cis_sshd_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_5_1, sshd, chapter_sshd, astra, audit]

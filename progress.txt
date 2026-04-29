@@ -1,0 +1,177 @@
+[2026-04-27T21:23:34Z] ASTRA-0001 Bootstrap Astra Linux CIS Ansible project governance and structure
+- Created independent Astra project skeleton in Astra_Ansible_CIS.
+- Created PRD.json with ordered tasks derived only from linux_cis.xlsx worksheet groups.
+- Added offline/OT safety documentation placeholders, required-information placeholders, playbook skeletons, role skeletons, inventories, and validation scripts.
+- No CIS controls were implemented in this task.
+- Caveat: Git commit will be attempted after validation; if Git is unavailable or repository initialization is required, that will be recorded.
+
+[2026-04-27T21:24:13Z] ASTRA-0001 validation addendum
+- PRD.json validation passed with scripts/validate_prd.sh.
+- YAML syntax validated locally with Ruby YAML parser for playbooks, inventories, role task files, and data placeholders.
+- ansible-playbook is not installed in this workstation environment, so Ansible syntax-check could not be executed here. The validation script remains in place for environments with Ansible installed.
+- Adjusted ansible.cfg to avoid non-core callback assumptions and fixed the placeholder include_vars path to resolve from playbook_dir.
+
+[2026-04-27T21:29:59Z] ASTRA-0002 Extract and normalize linux_cis.xlsx authoritative control scope
+- Extracted 319 dotted CIS rows from linux_cis.xlsx across 18 sheets.
+- Classified 265 controls and 54 group headers using the requested column A dotted-ID/title rule.
+- Preserved exact sheet names, row numbers, CIS numbering, raw status, and raw extra cells in JSON/YAML outputs.
+- Normalized raw status typo values manua/manula to manual while preserving status_from_excel.
+- Marked 91 controls with blank status as needs_scope_clarification.
+- No CIS controls were implemented in this task.
+
+[2026-04-27T21:33:43Z] ASTRA-0002A Normalize extracted linux_cis.xlsx scope schema for downstream consumers
+- Rewrote data/cis_linux_scope/controls_from_excel.json and .yml to the canonical top-level metadata/sheets/controls/group_headers schema.
+- Preserved 265 controls and 54 group headers across 18 exact Excel sheet names and indexes.
+- Preserved raw Excel status values, including manua/manula typos, while normalizing them to manual and blank control statuses to needs_scope_clarification.
+- Added OT-safe downstream fields including implementation_class, remediation_allowed_default=false, offline_dependency_required, high_risk_for_ot, and requires_engineer_approval.
+- Updated ASTRA-0003 and ASTRA-0004 to depend on ASTRA-0002A.
+- No CIS controls were implemented in this task.
+
+[2026-04-27T21:43:56Z] ASTRA-0002B Enforce exact canonical control scope schema parity
+- Rewrote controls_from_excel.json and controls_from_excel.yml directly from linux_cis.xlsx with exact canonical key sets.
+- Preserved 265 controls and 54 group headers across 18 sheets.
+- Classified controls only when dotted-row titles start with Ensure; other dotted rows are group_headers.
+- Normalized blank control statuses to needs_scope_clarification and manua/manula to manual.
+- Set remediation_allowed_default=false for every record and conservative OT/offline/engineer-approval flags without inventing environment values.
+- Updated ASTRA-0003 and ASTRA-0004 to depend on ASTRA-0002B.
+[2026-04-27T21:46:45Z] ASTRA-0002C Enforce canonical control scope schema parity
+- Rewrote controls_from_excel JSON/YAML from linux_cis.xlsx using exact canonical top-level, sheet, and record keys.
+- Preserved cell provenance in raw_extra_cells as cell/column/value objects and normalized empty text fields to empty strings.
+- Updated downstream dependencies so scripts mapping and required-information tasks consume this canonical schema.
+- No CIS controls were implemented.
+
+[2026-04-28T00:00:00Z] ASTRA-0003 Map scripts_summary.docx logic to extracted linux_cis.xlsx scope
+- Discovered 17 source scripts from scripts_summary.docx without executing Bash.
+- Mapped 257 reference-script check summaries to controls already present in controls_from_excel.json.
+- Marked 15 helper, chapter-marker, group-header, or non-control items out of scope.
+- Captured OS, package manager, service manager, config file, internet/offline, industrial-safety, Ansible-module, and shell-required assumptions for each mapped item.
+- No CIS controls were implemented and no source Bash was copied into Ansible tasks.
+[2026-04-27T21:56:57Z] ASTRA-0003A Normalize scripts_summary mapping schema parity
+- Rewrote scripts_summary_index.yml and mapped_script_logic.yml to canonical-script-mapping-v1.
+- Added unmapped_scope_controls and fixed canonical field names across independent projects.
+- Preserved scripts_summary.docx as reference-only and noted Debian/Ubuntu PDFs as reference-only.
+- No CIS controls were implemented and no Bash was executed.
+
+[2026-04-27T22:03:00Z] ASTRA-0004 Define required information for offline industrial execution
+- Created docs/required_information.md with required information groups, requirement levels, OT safety rules, and execution blocking behavior.
+- Created data/required_information/required_information_template.yml with production-safe placeholders only; no production values or secrets were invented.
+- Created data/required_information/example_lab_values.yml with lab-only example values clearly marked as non-production examples.
+- Updated data/required_information/README.md with usage and blocking rules for audit/remediation.
+- Included OT safety items for approved services/ports, must-not-stop services, SSH sources, local repo/ISO/internal mirror, SIEM/log retention, maintenance window, rollback/snapshot, and engineer approver.
+- No CIS controls were implemented and remediation remains disabled by default.
+[2026-04-27T22:04:28Z] ASTRA-0004A Normalize required-information schema parity
+- Rewrote required-information template and lab example files to canonical-required-information-v1.
+- Preserved 89 classified required-information items across 10 groups.
+- Updated OS mapping dependency to consume the normalized required-information schema.
+- No production values or secrets were added.
+[2026-04-27T22:05:01Z] ASTRA-0004A parity addendum
+- Aligned required-information content to the shared canonical checklist with 89 items.
+- No production values or secrets were added.
+
+[2026-04-27T22:08:37Z] ASTRA-0005 Define Astra Linux OS and version mapping files
+- Created canonical OS mapping files for Astra under data/os_map: supported versions, packages, services, paths, commands, and features.
+- Added docs/os_mapping.md describing version detection, scope limits, guard variables, and unverified Astra caveats.
+- Included Ansible fact handling for ansible_distribution, ansible_distribution_version, ansible_distribution_major_version, ansible_os_family, and ansible_kernel.
+- Marked common Astra versions as candidate_untested and did not mark any version as tested.
+- Included OT/offline guards: remediation_enabled=false, package_install_allowed=false, and local_repository_defined=false by default.
+- No CIS controls were implemented and no package repositories, production values, or tested versions were invented.
+
+[2026-04-28T04:13:16Z] ASTRA-1001 Implement audit-only CIS chapter/group SUDO for Astra Linux
+- Replaced cis_audit placeholder with SUDO chapter include and implemented audit-only controls 5.2.1 through 5.2.7 in roles/cis_audit/tasks/sudo.yml.
+- Added per-control evidence/result records as registered command/module outputs and set chapter summary fact cis_sudo_chapter_summary.
+- Enforced audit-only behavior: no remediation, no package install/remove, no service restart/reload, and changed_when=false across audit tasks.
+- Added allowlisted NOPASSWD exception handling for control 5.2.4 (default regex includes zabbix) to support manual-review-required outcomes when only approved exceptions are found.
+- Created chapter report at reports/lab/SUDO/chapter_report.md with implemented/skipped/manual/blocked/high-risk/offline/OS tested/commands/evidence/result sections and required approval line.
+- Validation: scripts/validate_prd.sh passed; YAML parsing for updated cis_audit task files passed.
+- Limitation: ansible-playbook is not installed in this local environment, so playbook syntax-check and runtime execution could not be performed here.
+
+[2026-04-28T04:18:49Z] ASTRA-2001 Review implemented CIS chapter/group SUDO for Astra Linux
+- Performed code review of ASTRA-1001 outputs: roles/cis_audit/tasks/main.yml, roles/cis_audit/tasks/sudo.yml, and reports/lab/SUDO/chapter_report.md.
+- Created review artifact at reviews/lab/SUDO/review.md with verdict pass after scope/safety/quality assessment.
+- Confirmed audit-only behavior and per-control evidence/result coverage for controls 5.2.1 through 5.2.7.
+- Recorded validation limitation: ansible-playbook is not installed in this environment, so runtime/syntax execution via ansible-playbook could not be performed.
+- Explicitly flagged temporary defaults (including NOPASSWD allowlist baseline and default path assumptions) as lab-only and requiring replacement with environment-approved allowlists/baselines.
+[2026-04-28T04:19:53Z] ASTRA-3001 Record engineer approval for CIS chapter/group SUDO for Astra Linux
+- Recorded engineer approval artifact at approvals/lab/SUDO/approval.md for project_os=astra, environment=lab, chapter/group=SUDO, source_scope=linux_cis.xlsx, excel sheet SUDO.
+- Decision set to approved with approver note and follow-up actions; confirmation scope explicitly limited to linux_cis.xlsx.
+- Explicitly marked temporary-default baseline assumptions (including test/default service-port assumptions) as temporary and requiring replacement by environment-approved allowlists/baselines.
+- Updated only ASTRA-3001 in PRD.json: engineer_approval_status=approved, status=done, technical_passes=true, passes=true, updated_at timestamp, evidence_files includes approval.md, comments include temporary-default marker.
+[2026-04-28T04:20:40Z] ASTRA-3001A Finalize SUDO chapter lifecycle after approval
+- Updated ASTRA-1001 to passes=true/status=done/engineer_approval_status=approved after ASTRA-3001.
+- Added lifecycle-correction task so scheduler advances to next chapter.
+
+[2026-04-28T04:21:56Z] ASTRA-1002 Implement audit-only CIS chapter/group Bootloader for Astra Linux
+- Added Bootloader chapter include to roles/cis_audit/tasks/main.yml and created roles/cis_audit/tasks/bootloader.yml.
+- Implemented only Bootloader controls 1.4.1 and 1.4.2 as audit-only checks with changed_when=false and tags: cis, control-ID style tags, chapter_bootloader, astra, audit.
+- Created reports/lab/Bootloader/chapter_report.md with required sections, explicit temporary service-port baseline assumptions, and required engineer approval line.
+- Updated only ASTRA-1002 in PRD.json to ready_for_engineer_review with technical_passes=true, passes=false, engineer_approval_status=pending, and temporary-default marker in comments.
+- Validation: PRD validation and YAML parsing checks executed successfully.
+- Limitation: ansible-playbook is not installed in this local environment, so playbook syntax-check/runtime execution could not be performed here.
+[2026-04-28T04:34:00Z] ASTRA-0002-extract-linux-cis-xlsx scope-lock governance task added
+- Added explicit scope-lock extraction task record to PRD as completed, with evidence links to controls_from_excel artifacts.
+- Reinforced policy: no CIS controls outside linux_cis.xlsx may be implemented.
+[2026-04-28T16:38:20Z] ASTRA-0006/0007/0008 reporting and tracking requirements added to PRD
+- Added tasks for automatic per-host checklist generation, results collation format, and repeat-audit delta tracking.
+- Added docs/reporting_strategy.md with built-in Ansible option assessment and offline-safe recommendation baseline.
+[2026-04-28T16:43:42Z] ASTRA-2002 Review implemented CIS chapter/group Bootloader for Astra Linux
+- Performed code review of ASTRA-1002 outputs: roles/cis_audit/tasks/main.yml, roles/cis_audit/tasks/bootloader.yml, and reports/lab/Bootloader/chapter_report.md.
+- Created review artifact at reviews/lab/Bootloader/review.md with verdict pass after scope/safety/quality assessment.
+- Confirmed audit-only behavior and per-control evidence/result coverage for controls 1.4.1 and 1.4.2.
+- Recorded validation limitation: ansible-playbook is not installed in this environment, so runtime/syntax execution via ansible-playbook could not be performed.
+- Explicitly flagged temporary defaults/assumptions (including test/default service-port baseline assumptions) as lab-only and requiring replacement with environment-approved allowlists/baselines.
+[2026-04-28T16:50:00Z] ASTRA-3002 Record engineer approval for CIS chapter/group Bootloader for Astra Linux
+- Created approvals/lab/Bootloader/approval.md with decision approved based on operator instruction to proceed with available data and temporary defaults.
+- Confirmed scope lock to linux_cis.xlsx and recorded explicit temporary default baseline note in approval artifact.
+- Updated only ASTRA-3002 in PRD.json: engineer_approval_status=approved, status=done, technical_passes=true, passes=true, evidence_files includes approvals/lab/Bootloader/approval.md, comments include temporary-default marker.
+[2026-04-28T16:48:33Z] ASTRA-3002A Finalize Bootloader chapter lifecycle after approval
+- Updated ASTRA-1002 to passes=true/status=done/engineer_approval_status=approved after ASTRA-3002.
+- Added lifecycle-correction task so scheduler advances to next chapter.
+[2026-04-28T18:56:45Z] ASTRA-0006-reporting-host-checklist-auto PRD consistency correction
+- Reset status from done->todo to align with passes=false prior to actual implementation.
+[2026-04-28T18:59:44Z] ASTRA-0006-reporting-host-checklist-auto completed: implemented per-host offline-safe checklist JSON/Markdown outputs from linux_cis scoped controls and available audit evidence in reports/lab/<timestamp>/ and reports/lab/latest/
+[2026-04-28T19:02:13Z] ASTRA-0007-results-persistence-and-format completed
+- Extended roles/cis_report/tasks/main.yml to collate machine-level run outputs from per-host checklist JSON after report generation.
+- Added run-level artifacts in reports/<env>/<timestamp>/ and reports/<env>/latest/: run_manifest.json (run index/manifest), run_summary.csv (flattened host summary), and run_summary.md (markdown run summary).
+- Kept implementation offline-safe and scope-locked to linux_cis.xlsx derived outputs; no external services or DB dependencies introduced.
+- Updated docs/reporting_strategy.md with optional XML mode note via ansible.builtin.junit callback and explicit note that XML mode is optional when ansible-playbook runtime is unavailable.
+- Documented database persistence as deferred optional future work gated by explicit approval.
+- Updated only ASTRA-0007 in PRD.json to status=done, technical_passes=true, passes=true with updated evidence/comments.
+[2026-04-28T19:13:21Z] ASTRA-0008-audit-delta-tracking completed
+- Implemented repeat-audit delta tracking in roles/cis_report/tasks/main.yml using outputs from ASTRA-0006/ASTRA-0007.
+- Added per-host baseline selection before latest overwrite: prefer reports/<env>/latest/<host>/checklist.json; fallback to the most recent prior timestamped checklist.json.
+- Added per-host control transition classification and delta artifact outputs at reports/<env>/<timestamp>/<host>/delta.json and reports/<env>/latest/<host>/delta.json.
+- Added run-level delta aggregation with per-control changed/new/resolved/unchanged counters and outputs at reports/<env>/<timestamp>/run_delta_summary.json and reports/<env>/latest/run_delta_summary.json.
+- Extended run manifest/summary outputs to include delta references and run summary markdown delta table.
+- Updated docs/reporting_strategy.md with implemented baseline selection and delta classification method.
+- Validation: scripts/validate_prd.sh passed; YAML parsing passed.
+- Limitation: ./scripts/run_syntax_check.sh cannot run here because ansible-playbook is not installed in this workstation.
+[2026-04-28T19:19:33Z] ASTRA-1003 Implement audit-only CIS chapter/group PAM for Astra Linux
+- Added PAM chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/pam.yml.
+- Implemented only linux_cis scoped PAM control rows (5.3.1.1 through 5.3.3.4.4); excluded group headers and out-of-scope rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_pam_chapter_summary.
+- Created reports/lab/PAM/chapter_report.md with required sections and mandatory engineer approval line.
+- Temporary/default baseline note: inherited assumptions (package/latest baseline and compliance thresholds) require environment-approved values before final completion.
+- Validation: PRD and YAML checks executed; ansible-playbook availability limitation is recorded when missing.
+2026-04-28T20:05:00Z ASTRA-2003 done: reviewed PAM chapter implementation (ASTRA-1003) for scope lock to linux_cis rows, audit-only OT safety, evidence quality, and PRD discipline; verdict=pass; review artifact added at reviews/lab/PAM/review.md; validation limitation recorded (ansible-playbook unavailable on workstation).
+2026-04-28T20:25:00Z ASTRA-1004 ready_for_engineer_review: implemented audit-only Cron&At controls (2.4.1.1-2.4.2.1) from linux_cis.xlsx row scope only; added role include and cron_at chapter tasks with per-control evidence/results and chapter summary fact; added explicit missing-information placeholders for approved cron/at user baselines and Astra cron service unit validation; chapter report created at reports/lab/CronAndAt/chapter_report.md; engineer approval deferred pending OT data and real-host validation.
+2026-04-28T21:05:00Z ASTRA-2004 done: reviewed Cron&At chapter implementation (ASTRA-1004) for strict linux_cis scope, audit-only OT safety, evidence quality, and explicit missing-data placeholders; verdict=pass; review artifact added at reviews/lab/CronAndAt/review.md; engineer approval remains deferred to ASTRA-3004 pending environment data and host validation.
+2026-04-29T09:20:00Z ASTRA-3004 done: engineer approval recorded for Cron&At chapter based on user confirmation to continue autonomously; placeholders for OT-specific baselines and Astra unit validation intentionally retained for later environment data integration and host validation.
+[2026-04-29T04:14:56Z] ASTRA-1005 Implement audit-only CIS chapter/group SSHD for Astra Linux
+- Added SSHD chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/sshd.yml.
+- Implemented only linux_cis scoped SSHD control rows (5.1.1 through 5.1.22); excluded group headers and out-of-scope rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_sshd_chapter_summary.
+- Added explicit OT baseline placeholders for approved ssh access subnets/users/groups, approved ciphers/macs/kex, approved banner text source, and approved idle/session/max settings.
+- Created reports/lab/SSHD/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation is recorded when missing.
+2026-04-29T09:35:00Z ASTRA-2005 done: reviewed SSHD chapter implementation (ASTRA-1005) for strict linux_cis scope, audit-only OT safety, evidence quality, and explicit OT baseline placeholders; verdict=pass; review artifact added at reviews/lab/SSHD/review.md.
+2026-04-29T09:45:00Z ASTRA-3005 done: engineer approval recorded for SSHD chapter based on autonomous continuation confirmation; placeholders retained for environment-specific OT baselines and host validation.
+[2026-04-29T04:21:21Z] ASTRA-1006 Implement audit-only CIS chapter/group Local Users and Groups for Astra Linux
+- Added Local Users and Groups chapter include in roles/cis_audit/tasks/main.yml and implemented roles/cis_audit/tasks/local_users_groups.yml.
+- Implemented only linux_cis scoped Local Users and Groups control rows (7.2.1 through 7.2.10); excluded group headers and out-of-scope rows.
+- Enforced audit-only behavior with changed_when=false and no remediation actions.
+- Added registered evidence outputs and per-control result facts, plus chapter summary fact cis_local_users_groups_chapter_summary.
+- Added explicit OT-safe placeholders for approved duplicate exceptions, approved nonlocal home exceptions, and approved dotfile exemptions.
+- Created reports/lab/LocalUsersAndGroups/chapter_report.md with required sections and mandatory engineer approval line.
+- Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.

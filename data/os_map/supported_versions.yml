@@ -1,0 +1,111 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+detection:
+  ansible_facts_required:
+  - ansible_distribution
+  - ansible_distribution_version
+  - ansible_distribution_major_version
+  - ansible_os_family
+  - ansible_kernel
+  distribution_match:
+    accepted_names:
+    - Astra Linux
+    candidate_unverified_names:
+    - Astra Linux Special Edition
+    - Astra Linux Common Edition
+    - Astra Linux (Smolensk)
+    reject_if_distribution_missing: true
+    reject_if_not_astra: true
+  family_expectation:
+    ansible_os_family: Debian
+    status: candidate_untested
+    notes: Astra is treated as Debian-like for package/path interpretation only when facts confirm Astra; this is not tested
+      evidence.
+  version_fact_priority:
+  - ansible_distribution_version
+  - ansible_distribution_major_version
+  kernel_fact: ansible_kernel
+supported_versions:
+- version: '1.6'
+  edition: Astra Linux Special Edition
+  codename: unknown_unverified
+  status: candidate_untested
+  tested: false
+  matching:
+    ansible_distribution_version_prefixes:
+    - '1.6'
+    ansible_distribution_major_version: '1'
+  notes: Common Astra version candidate only; no project lab evidence recorded.
+- version: '1.7'
+  edition: Astra Linux Special Edition
+  codename: unknown_unverified
+  status: candidate_untested
+  tested: false
+  matching:
+    ansible_distribution_version_prefixes:
+    - '1.7'
+    ansible_distribution_major_version: '1'
+  notes: Common Astra version candidate only; no project lab evidence recorded.
+- version: '1.8'
+  edition: Astra Linux Special Edition
+  codename: unknown_unverified
+  status: candidate_untested
+  tested: false
+  matching:
+    ansible_distribution_version_prefixes:
+    - '1.8'
+    ansible_distribution_major_version: '1'
+  notes: Common Astra version candidate only; no project lab evidence recorded.
+- version: 2.x
+  edition: Astra Linux Common Edition
+  codename: unknown_unverified
+  status: candidate_untested
+  tested: false
+  matching:
+    ansible_distribution_version_prefixes:
+    - '2.'
+    ansible_distribution_major_version: '2'
+  notes: Common Astra family candidate only; no project lab evidence recorded.
+default_version_status: unknown_unverified
+unknown_version_policy:
+  audit: allow read-only evidence collection when Astra distribution is detected and the version is candidate or unknown;
+    report version_status explicitly
+  remediation: block unless version is approved in required information and all remediation guards are true
+  package_install: block unless package_install_allowed, local_repository_defined, remediation_enabled, maintenance window,
+    and approval data are true
+guards:
+  remediation_enabled:
+    default: false
+    required_for:
+    - any file change
+    - any package install or removal
+    - any service enable disable restart reload
+    - any bootloader update
+    - any sysctl persistence change
+  package_install_allowed:
+    default: false
+    required_for:
+    - installing missing packages
+    - updating packages
+    - removing packages
+  local_repository_defined:
+    default: false
+    required_for:
+    - apt package installation
+    - apt package upgrade
+    - apt package removal where package metadata is needed

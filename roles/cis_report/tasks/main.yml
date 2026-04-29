@@ -1,0 +1,552 @@
+---
+- name: Report | Load authoritative linux_cis scope
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/cis_linux_scope/controls_from_excel.yml"
+    name: cis_scope_data
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build run timestamp once
+  ansible.builtin.set_fact:
+    cis_report_run_ts: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+  changed_when: false
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: true
+  tags: [cis, report, astra]
+
+- name: Report | Aggregate Bootloader audit results map
+  ansible.builtin.set_fact:
+    cis_report_results_map: "{{ (cis_report_results_map | default({})) | combine({ item.control_id: item }, recursive=True) }}"
+  loop: "{{ cis_bootloader_chapter_summary.controls | default([]) }}"
+  when:
+    - cis_bootloader_chapter_summary is defined
+    - cis_bootloader_chapter_summary.controls is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Merge SUDO results map
+  ansible.builtin.set_fact:
+    cis_report_results_map: "{{ (cis_report_results_map | default({})) | combine(cis_sudo_chapter_summary.results | default({}), recursive=True) }}"
+  when: cis_sudo_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Merge SUDO evidence map
+  ansible.builtin.set_fact:
+    cis_report_evidence_map: "{{ (cis_report_evidence_map | default({})) | combine(cis_sudo_chapter_summary.evidence | default({}), recursive=True) }}"
+  when: cis_sudo_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Initialize checklist controls list
+  ansible.builtin.set_fact:
+    cis_report_controls: []
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build per-control checklist entries from scoped controls only
+  ansible.builtin.set_fact:
+    cis_report_controls: "{{ cis_report_controls + [cis_report_control_entry] }}"
+  vars:
+    cis_report_scope_control: "{{ item }}"
+    cis_report_result: "{{ (cis_report_results_map | default({})).get(cis_report_scope_control.cis_control_id, {}) }}"
+    cis_report_evidence: "{{ (cis_report_evidence_map | default({})).get(cis_report_scope_control.cis_control_id, {}) }}"
+    cis_report_audit_status: "{{ cis_report_result.status | default('not_assessed') }}"
+    cis_report_status_mark: >-
+      {% if cis_report_result | length > 0 %}
+      {{ {'pass': 'PASS', 'fail': 'FAIL', 'manual_review_required': 'MANUAL_REVIEW_REQUIRED'}.get(cis_report_audit_status, 'UNKNOWN') }}
+      {% elif cis_report_scope_control.implementation_class == 'manual_review' %}
+      MANUAL_SCOPE_ONLY
+      {% elif cis_report_scope_control.implementation_class == 'needs_scope_clarification' %}
+      NEEDS_SCOPE_CLARIFICATION
+      {% else %}
+      NOT_ASSESSED
+      {% endif %}
+    cis_report_control_entry:
+      control_id: "{{ cis_report_scope_control.cis_control_id }}"
+      control_title: "{{ cis_report_scope_control.cis_control_title }}"
+      chapter_group: "{{ cis_report_scope_control.sheet_name }}"
+      sheet_index: "{{ cis_report_scope_control.sheet_index }}"
+      status_mark: "{{ cis_report_status_mark | trim }}"
+      audit_status: "{{ cis_report_audit_status }}"
+      implementation_class: "{{ cis_report_scope_control.implementation_class }}"
+      normalized_scope_status: "{{ cis_report_scope_control.normalized_status }}"
+      result_reason: "{{ cis_report_result.reason | default('No audit evidence for this control in current run.') }}"
+      has_evidence: "{{ (cis_report_evidence | length) > 0 }}"
+      evidence: "{{ cis_report_evidence }}"
+  loop: "{{ cis_scope_data.controls | default([]) }}"
+  when:
+    - item.record_type | default('control') == 'control'
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build chapter grouped checklist list
+  ansible.builtin.set_fact:
+    cis_report_chapters: []
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Populate chapter grouped checklist list
+  ansible.builtin.set_fact:
+    cis_report_chapters: "{{ cis_report_chapters + [ {'chapter_group': item.0, 'controls': item.1 } ] }}"
+  loop: "{{ cis_report_controls | groupby('chapter_group') }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build host metadata
+  ansible.builtin.set_fact:
+    cis_report_host_metadata:
+      inventory_hostname: "{{ inventory_hostname }}"
+      ansible_host: "{{ hostvars[inventory_hostname].ansible_host | default('') }}"
+      inventory_groups: "{{ group_names | default([]) }}"
+      project_os: astra
+      source_scope: linux_cis.xlsx
+      report_environment: "{{ cis_report_target_env | default('lab') }}"
+      generated_at_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build per-host checklist artifact model
+  ansible.builtin.set_fact:
+    cis_host_checklist:
+      metadata: "{{ cis_report_host_metadata }}"
+      summary:
+        total_controls: "{{ cis_report_controls | length }}"
+        pass: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'PASS') | list | length }}"
+        fail: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'FAIL') | list | length }}"
+        manual_review_required: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'MANUAL_REVIEW_REQUIRED') | list | length }}"
+        manual_scope_only: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'MANUAL_SCOPE_ONLY') | list | length }}"
+        needs_scope_clarification: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'NEEDS_SCOPE_CLARIFICATION') | list | length }}"
+        not_assessed: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'NOT_ASSESSED') | list | length }}"
+        unknown: "{{ cis_report_controls | selectattr('status_mark', 'equalto', 'UNKNOWN') | list | length }}"
+      chapters: "{{ cis_report_chapters }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Check latest baseline checklist presence for host
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}/checklist.json"
+  register: cis_report_latest_baseline_stat
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Find fallback timestamped baselines for host checklist
+  ansible.builtin.find:
+    paths:
+      - "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}"
+    file_type: file
+    patterns:
+      - checklist.json
+    recurse: true
+  register: cis_report_host_checklist_candidates
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Select host baseline checklist path
+  ansible.builtin.set_fact:
+    cis_report_previous_host_checklist_path: >-
+      {% if cis_report_latest_baseline_stat.stat.exists %}
+      {{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}/checklist.json
+      {% else %}
+      {{
+        (
+          (
+            cis_report_host_checklist_candidates.files | default([])
+          )
+          | map(attribute='path')
+          | select('match', '.*/[0-9]{8}T[0-9]{6}Z/' ~ (inventory_hostname | regex_escape) ~ '/checklist\\.json$')
+          | list
+          | sort
+          | last
+        ) | default('')
+      }}
+      {% endif %}
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Load previous host checklist baseline if available
+  ansible.builtin.set_fact:
+    cis_report_previous_host_checklist: "{{ lookup('ansible.builtin.file', cis_report_previous_host_checklist_path | trim) | from_json }}"
+  when: (cis_report_previous_host_checklist_path | default('') | trim | length) > 0
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build previous control status map from baseline
+  ansible.builtin.set_fact:
+    cis_report_previous_status_map: "{{ (cis_report_previous_status_map | default({})) | combine({ item.control_id: item.status_mark }, recursive=True) }}"
+  loop: "{{ (cis_report_previous_host_checklist.chapters | default([])) | map(attribute='controls') | flatten }}"
+  when: cis_report_previous_host_checklist is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Initialize host delta controls list
+  ansible.builtin.set_fact:
+    cis_report_host_delta_controls: []
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build host delta controls by control status transition
+  ansible.builtin.set_fact:
+    cis_report_host_delta_controls: "{{ cis_report_host_delta_controls + [cis_report_delta_control_entry] }}"
+  vars:
+    cis_report_previous_status: "{{ (cis_report_previous_status_map | default({})).get(item.control_id) }}"
+    cis_report_current_status: "{{ item.status_mark }}"
+    cis_report_delta_classification: >-
+      {% if cis_report_previous_status is not defined or cis_report_previous_status is none %}
+      new
+      {% elif cis_report_previous_status != cis_report_current_status and cis_report_current_status == 'PASS' and cis_report_previous_status != 'PASS' %}
+      resolved
+      {% elif cis_report_previous_status != cis_report_current_status %}
+      changed
+      {% else %}
+      unchanged
+      {% endif %}
+    cis_report_delta_control_entry:
+      control_id: "{{ item.control_id }}"
+      chapter_group: "{{ item.chapter_group }}"
+      previous_status_mark: "{{ cis_report_previous_status | default('not_present') }}"
+      current_status_mark: "{{ cis_report_current_status }}"
+      delta_classification: "{{ cis_report_delta_classification | trim }}"
+  loop: "{{ cis_report_controls }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build host-level delta summary counts
+  ansible.builtin.set_fact:
+    cis_report_host_delta_summary:
+      changed: "{{ cis_report_host_delta_controls | selectattr('delta_classification', 'equalto', 'changed') | list | length }}"
+      new: "{{ cis_report_host_delta_controls | selectattr('delta_classification', 'equalto', 'new') | list | length }}"
+      resolved: "{{ cis_report_host_delta_controls | selectattr('delta_classification', 'equalto', 'resolved') | list | length }}"
+      unchanged: "{{ cis_report_host_delta_controls | selectattr('delta_classification', 'equalto', 'unchanged') | list | length }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build host delta artifact model
+  ansible.builtin.set_fact:
+    cis_host_delta:
+      metadata:
+        inventory_hostname: "{{ inventory_hostname }}"
+        report_environment: "{{ cis_report_target_env | default('lab') }}"
+        generated_at_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        current_run_timestamp_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        previous_baseline_path: "{{ cis_report_previous_host_checklist_path | default('') | trim }}"
+        previous_baseline_present: "{{ (cis_report_previous_host_checklist_path | default('') | trim | length) > 0 }}"
+      summary: "{{ cis_report_host_delta_summary }}"
+      controls: "{{ cis_report_host_delta_controls }}"
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Ensure per-host timestamped report directory exists
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0750"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Ensure per-host latest report directory exists
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}"
+    state: directory
+    mode: "0750"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write per-host checklist JSON (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ inventory_hostname }}/checklist.json"
+    mode: "0640"
+    content: "{{ cis_host_checklist | to_nice_json }}\n"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write per-host checklist JSON (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}/checklist.json"
+    mode: "0640"
+    content: "{{ cis_host_checklist | to_nice_json }}\n"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write per-host delta JSON (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ inventory_hostname }}/delta.json"
+    mode: "0640"
+    content: "{{ cis_host_delta | to_nice_json }}\n"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write per-host delta JSON (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}/delta.json"
+    mode: "0640"
+    content: "{{ cis_host_delta | to_nice_json }}\n"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Render per-host checklist Markdown (timestamped)
+  ansible.builtin.template:
+    src: checklist.md.j2
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ inventory_hostname }}/checklist.md"
+    mode: "0640"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Render per-host checklist Markdown (latest)
+  ansible.builtin.template:
+    src: checklist.md.j2
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/{{ inventory_hostname }}/checklist.md"
+    mode: "0640"
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Build run-level host record list from per-host checklist JSON
+  ansible.builtin.set_fact:
+    cis_report_host_run_records: "{{ (cis_report_host_run_records | default([])) + [cis_report_host_run_record] }}"
+  vars:
+    cis_report_env: "{{ cis_report_target_env | default('lab') }}"
+    cis_report_host_json_path: "{{ playbook_dir }}/../reports/{{ cis_report_env }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ item }}/checklist.json"
+    cis_report_host_payload: "{{ lookup('ansible.builtin.file', cis_report_host_json_path) | from_json }}"
+    cis_report_host_run_record:
+      inventory_hostname: "{{ item }}"
+      checklist_json_path: "reports/{{ cis_report_env }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ item }}/checklist.json"
+      checklist_markdown_path: "reports/{{ cis_report_env }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ item }}/checklist.md"
+      delta_json_path: "reports/{{ cis_report_env }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ item }}/delta.json"
+      total_controls: "{{ cis_report_host_payload.summary.total_controls | int }}"
+      pass: "{{ cis_report_host_payload.summary.pass | int }}"
+      fail: "{{ cis_report_host_payload.summary.fail | int }}"
+      manual_review_required: "{{ cis_report_host_payload.summary.manual_review_required | int }}"
+      manual_scope_only: "{{ cis_report_host_payload.summary.manual_scope_only | int }}"
+      needs_scope_clarification: "{{ cis_report_host_payload.summary.needs_scope_clarification | int }}"
+      not_assessed: "{{ cis_report_host_payload.summary.not_assessed | int }}"
+      unknown: "{{ cis_report_host_payload.summary.unknown | int }}"
+  loop: "{{ ansible_play_hosts_all | sort }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Initialize run-level control delta counts map
+  ansible.builtin.set_fact:
+    cis_report_all_host_delta_controls: []
+    cis_report_control_delta_counts: {}
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Collect per-host delta controls for run aggregation
+  ansible.builtin.set_fact:
+    cis_report_all_host_delta_controls: "{{ cis_report_all_host_delta_controls + cis_report_host_delta_payload.controls }}"
+  vars:
+    cis_report_host_delta_path: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/{{ item }}/delta.json"
+    cis_report_host_delta_payload: "{{ lookup('ansible.builtin.file', cis_report_host_delta_path) | from_json }}"
+  loop: "{{ ansible_play_hosts_all | sort }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Aggregate run-level per-control delta counts from collected deltas
+  ansible.builtin.set_fact:
+    cis_report_control_delta_counts: "{{ cis_report_control_delta_counts | combine(cis_report_next_delta_counts, recursive=True) }}"
+  vars:
+    cis_report_existing_control_counts: "{{ cis_report_control_delta_counts.get(item.control_id, {'changed': 0, 'new': 0, 'resolved': 0, 'unchanged': 0}) }}"
+    cis_report_next_control_counts: >-
+      {{
+        cis_report_existing_control_counts
+        | combine({ item.delta_classification: (cis_report_existing_control_counts[item.delta_classification] | int) + 1 }, recursive=True)
+      }}
+    cis_report_next_delta_counts: "{{ { item.control_id: cis_report_next_control_counts } }}"
+  loop: "{{ cis_report_all_host_delta_controls }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build run-level delta summary model
+  ansible.builtin.set_fact:
+    cis_report_run_delta_summary:
+      metadata:
+        report_environment: "{{ cis_report_target_env | default('lab') }}"
+        run_timestamp_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        generated_at_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        host_count: "{{ ansible_play_hosts_all | length }}"
+      per_control_counts: "{{ cis_report_control_delta_counts }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build run-level manifest model
+  ansible.builtin.set_fact:
+    cis_report_run_manifest:
+      metadata:
+        report_environment: "{{ cis_report_target_env | default('lab') }}"
+        run_timestamp_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        generated_at_utc: "{{ hostvars['localhost'].cis_report_run_ts }}"
+        project_os: astra
+        source_scope: linux_cis.xlsx
+        host_count: "{{ cis_report_host_run_records | length }}"
+      host_records: "{{ cis_report_host_run_records }}"
+      delta_summary_path: "reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/run_delta_summary.json"
+      totals:
+        total_controls: "{{ cis_report_host_run_records | map(attribute='total_controls') | map('int') | sum }}"
+        pass: "{{ cis_report_host_run_records | map(attribute='pass') | map('int') | sum }}"
+        fail: "{{ cis_report_host_run_records | map(attribute='fail') | map('int') | sum }}"
+        manual_review_required: "{{ cis_report_host_run_records | map(attribute='manual_review_required') | map('int') | sum }}"
+        manual_scope_only: "{{ cis_report_host_run_records | map(attribute='manual_scope_only') | map('int') | sum }}"
+        needs_scope_clarification: "{{ cis_report_host_run_records | map(attribute='needs_scope_clarification') | map('int') | sum }}"
+        not_assessed: "{{ cis_report_host_run_records | map(attribute='not_assessed') | map('int') | sum }}"
+        unknown: "{{ cis_report_host_run_records | map(attribute='unknown') | map('int') | sum }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build flattened CSV lines from run manifest
+  ansible.builtin.set_fact:
+    cis_report_run_csv_lines: "{{ (cis_report_run_csv_lines | default([])) + [cis_report_csv_row] }}"
+  vars:
+    cis_report_csv_row: >-
+      {{ item.inventory_hostname }},{{ item.total_controls }},{{ item.pass }},{{ item.fail }},{{ item.manual_review_required }},{{ item.manual_scope_only }},{{ item.needs_scope_clarification }},{{ item.not_assessed }},{{ item.unknown }},{{ item.checklist_json_path }},{{ item.checklist_markdown_path }},{{ item.delta_json_path }}
+  loop: "{{ cis_report_host_run_records }}"
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Build markdown run summary content
+  ansible.builtin.set_fact:
+    cis_report_run_summary_md: |
+      # CIS Run Summary
+
+      - Environment: {{ cis_report_target_env | default('lab') }}
+      - Run timestamp (UTC): {{ hostvars['localhost'].cis_report_run_ts }}
+      - Host count: {{ cis_report_run_manifest.metadata.host_count }}
+      - Source scope: linux_cis.xlsx
+      - Project OS: astra
+
+      ## Aggregated Totals
+
+      - Total controls: {{ cis_report_run_manifest.totals.total_controls }}
+      - PASS: {{ cis_report_run_manifest.totals.pass }}
+      - FAIL: {{ cis_report_run_manifest.totals.fail }}
+      - MANUAL_REVIEW_REQUIRED: {{ cis_report_run_manifest.totals.manual_review_required }}
+      - MANUAL_SCOPE_ONLY: {{ cis_report_run_manifest.totals.manual_scope_only }}
+      - NEEDS_SCOPE_CLARIFICATION: {{ cis_report_run_manifest.totals.needs_scope_clarification }}
+      - NOT_ASSESSED: {{ cis_report_run_manifest.totals.not_assessed }}
+      - UNKNOWN: {{ cis_report_run_manifest.totals.unknown }}
+
+      ## Per-Host Snapshot
+
+      | Host | Total | PASS | FAIL | MANUAL_REVIEW_REQUIRED | MANUAL_SCOPE_ONLY | NEEDS_SCOPE_CLARIFICATION | NOT_ASSESSED | UNKNOWN |
+      | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+      {% for host_record in cis_report_host_run_records %}
+      | {{ host_record.inventory_hostname }} | {{ host_record.total_controls }} | {{ host_record.pass }} | {{ host_record.fail }} | {{ host_record.manual_review_required }} | {{ host_record.manual_scope_only }} | {{ host_record.needs_scope_clarification }} | {{ host_record.not_assessed }} | {{ host_record.unknown }} |
+      {% endfor %}
+
+      ## Run Delta Overview
+
+      | Control ID | Changed | New | Resolved | Unchanged |
+      | --- | ---: | ---: | ---: | ---: |
+      {% for control_id, delta_counts in (cis_report_run_delta_summary.per_control_counts | dictsort) %}
+      | {{ control_id }} | {{ delta_counts.changed | int }} | {{ delta_counts.new | int }} | {{ delta_counts.resolved | int }} | {{ delta_counts.unchanged | int }} |
+      {% endfor %}
+  run_once: true
+  delegate_to: localhost
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Ensure run-level directories exist
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ item }}"
+    state: directory
+    mode: "0750"
+  loop:
+    - "{{ hostvars['localhost'].cis_report_run_ts }}"
+    - latest
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write run-level manifest JSON (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/run_manifest.json"
+    mode: "0640"
+    content: "{{ cis_report_run_manifest | to_nice_json }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write run-level manifest JSON (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/run_manifest.json"
+    mode: "0640"
+    content: "{{ cis_report_run_manifest | to_nice_json }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write run-level delta summary JSON (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/run_delta_summary.json"
+    mode: "0640"
+    content: "{{ cis_report_run_delta_summary | to_nice_json }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write run-level delta summary JSON (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/run_delta_summary.json"
+    mode: "0640"
+    content: "{{ cis_report_run_delta_summary | to_nice_json }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write flattened run CSV summary (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/run_summary.csv"
+    mode: "0640"
+    content: |
+      inventory_hostname,total_controls,pass,fail,manual_review_required,manual_scope_only,needs_scope_clarification,not_assessed,unknown,checklist_json_path,checklist_markdown_path,delta_json_path
+      {{ (cis_report_run_csv_lines | default([])) | join('\n') }}
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write flattened run CSV summary (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/run_summary.csv"
+    mode: "0640"
+    content: |
+      inventory_hostname,total_controls,pass,fail,manual_review_required,manual_scope_only,needs_scope_clarification,not_assessed,unknown,checklist_json_path,checklist_markdown_path,delta_json_path
+      {{ (cis_report_run_csv_lines | default([])) | join('\n') }}
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write markdown run summary (timestamped)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/{{ hostvars['localhost'].cis_report_run_ts }}/run_summary.md"
+    mode: "0640"
+    content: "{{ cis_report_run_summary_md | trim }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]
+
+- name: Report | Write markdown run summary (latest)
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../reports/{{ cis_report_target_env | default('lab') }}/latest/run_summary.md"
+    mode: "0640"
+    content: "{{ cis_report_run_summary_md | trim }}\n"
+  run_once: true
+  delegate_to: localhost
+  tags: [cis, report, astra]

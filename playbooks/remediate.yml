@@ -1,0 +1,12 @@
+---
+- name: Astra CIS remediation
+  hosts: astra_linux
+  gather_facts: true
+  vars:
+    cis_remediation_enabled: false
+    cis_destructive_changes_allowed: false
+  roles:
+    - role: cis_common
+      tags: [cis, common, remediate, astra]
+    - role: cis_remediate
+      tags: [cis, remediate, astra]

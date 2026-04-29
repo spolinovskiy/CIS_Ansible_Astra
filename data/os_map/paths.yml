@@ -1,0 +1,98 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+paths:
+  sudo:
+    sudoers: /etc/sudoers
+    sudoers_d: /etc/sudoers.d
+    sudo_log_candidate: /var/log/sudo.log
+  pam:
+    pam_d: /etc/pam.d
+    common_auth: /etc/pam.d/common-auth
+    common_account: /etc/pam.d/common-account
+    common_password: /etc/pam.d/common-password
+    common_session: /etc/pam.d/common-session
+    faillock_conf: /etc/security/faillock.conf
+    pwquality_conf: /etc/security/pwquality.conf
+    pwhistory_conf: /etc/security/pwhistory.conf
+    status: debian_like_candidate_untested
+  cron_at:
+    crontab: /etc/crontab
+    cron_d: /etc/cron.d
+    cron_hourly: /etc/cron.hourly
+    cron_daily: /etc/cron.daily
+    cron_weekly: /etc/cron.weekly
+    cron_monthly: /etc/cron.monthly
+    cron_allow: /etc/cron.allow
+    cron_deny: /etc/cron.deny
+    at_allow: /etc/at.allow
+    at_deny: /etc/at.deny
+  sshd:
+    config: /etc/ssh/sshd_config
+    config_d: /etc/ssh/sshd_config.d
+    host_keys_glob: /etc/ssh/ssh_host_*_key*
+  time_sync:
+    chrony_conf: /etc/chrony/chrony.conf
+    chrony_d: /etc/chrony/conf.d
+    timesyncd_conf: /etc/systemd/timesyncd.conf
+    timesyncd_conf_d: /etc/systemd/timesyncd.conf.d
+  logging:
+    journald_conf: /etc/systemd/journald.conf
+    journald_conf_d: /etc/systemd/journald.conf.d
+    rsyslog_conf: /etc/rsyslog.conf
+    rsyslog_d: /etc/rsyslog.d
+    logrotate_conf: /etc/logrotate.conf
+    logrotate_d: /etc/logrotate.d
+    var_log: /var/log
+  auditd:
+    auditd_conf: /etc/audit/auditd.conf
+    rules_d: /etc/audit/rules.d
+    audit_rules: /etc/audit/audit.rules
+    audit_log: /var/log/audit/audit.log
+    audit_log_dir: /var/log/audit
+  bootloader:
+    grub_default: /etc/default/grub
+    grub_d: /etc/grub.d
+    grub_cfg_candidates:
+    - /boot/grub/grub.cfg
+    - /boot/grub2/grub.cfg
+    efi_candidates:
+    - /boot/efi/EFI/astra/grub.cfg
+    - /boot/efi/EFI/debian/grub.cfg
+  filesystem_mount:
+    fstab: /etc/fstab
+    proc_mounts: /proc/mounts
+    mountinfo: /proc/self/mountinfo
+  sysctl:
+    sysctl_conf: /etc/sysctl.conf
+    sysctl_d: /etc/sysctl.d
+    proc_sys: /proc/sys
+  kernel_modules:
+    modprobe_d: /etc/modprobe.d
+    modules_load_d: /etc/modules-load.d
+    proc_modules: /proc/modules
+    lib_modules_kernel: /lib/modules/{{ ansible_kernel }}
+  banners:
+    motd: /etc/motd
+    issue: /etc/issue
+    issue_net: /etc/issue.net
+  package_manager:
+    apt_sources: /etc/apt/sources.list
+    apt_sources_d: /etc/apt/sources.list.d
+    apt_trusted_gpg_d: /etc/apt/trusted.gpg.d
+    dpkg_status: /var/lib/dpkg/status
+path_status_default: candidate_untested_for_astra

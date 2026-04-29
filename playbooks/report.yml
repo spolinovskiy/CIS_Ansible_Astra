@@ -1,0 +1,11 @@
+---
+- name: Astra CIS report
+  hosts: astra_linux
+  gather_facts: false
+  vars:
+    cis_report_target_env: lab
+  roles:
+    - role: cis_audit
+      tags: [cis, audit, astra]
+    - role: cis_report
+      tags: [cis, report, astra]

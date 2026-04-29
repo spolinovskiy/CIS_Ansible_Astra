@@ -1,0 +1,11 @@
+---
+- name: Astra CIS audit
+  hosts: astra_linux
+  gather_facts: true
+  vars:
+    cis_remediation_enabled: false
+  roles:
+    - role: cis_common
+      tags: [cis, common, audit, astra]
+    - role: cis_audit
+      tags: [cis, audit, astra]

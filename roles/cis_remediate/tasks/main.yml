@@ -1,0 +1,8 @@
+---
+- name: Remediate | Stop because remediation is disabled by default
+  ansible.builtin.assert:
+    that:
+      - cis_remediation_enabled | bool
+    fail_msg: "Remediation is disabled by default for OT safety."
+  when: not cis_remediation_enabled | bool
+  tags: [cis, remediate, astra]

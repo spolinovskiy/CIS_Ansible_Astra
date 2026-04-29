@@ -1,0 +1,313 @@
+---
+- name: SUDO | Load Astra OS path map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/paths.yml"
+    name: cis_os_paths
+  changed_when: false
+  tags: [cis, cis_5_2, sudo, chapter_sudo, astra, audit]
+
+- name: SUDO | Load Astra package map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/packages.yml"
+    name: cis_os_packages
+  changed_when: false
+  tags: [cis, cis_5_2, sudo, chapter_sudo, astra, audit]
+
+- name: SUDO | Define chapter defaults
+  ansible.builtin.set_fact:
+    cis_sudoers_primary: "{{ cis_os_paths.paths.sudo.sudoers | default('/etc/sudoers') }}"
+    cis_sudoers_d_path: "{{ cis_os_paths.paths.sudo.sudoers_d | default('/etc/sudoers.d') }}"
+    cis_sudo_pam_su_path: "{{ cis_os_paths.paths.pam.pam_d | default('/etc/pam.d') }}/su"
+    cis_sudo_allowed_nopasswd_patterns: "{{ cis_sudo_allowed_nopasswd_patterns | default(['\\bzabbix\\b']) }}"
+  changed_when: false
+  tags: [cis, cis_5_2, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.1 | Audit sudo package installation state
+  ansible.builtin.package_facts:
+    manager: auto
+  changed_when: false
+  tags: [cis, cis_5_2_1, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_1_evidence:
+      package_present: "{{ 'sudo' in (ansible_facts.packages | default({})) }}"
+      package_versions: "{{ (ansible_facts.packages.sudo | default([])) | map(attribute='version') | list }}"
+      package_source: package_facts
+    cis_5_2_1_result:
+      control_id: "5.2.1"
+      title: "Ensure sudo is installed"
+      status: "{{ 'pass' if ('sudo' in (ansible_facts.packages | default({}))) else 'fail' }}"
+      reason: "{{ 'sudo package detected' if ('sudo' in (ansible_facts.packages | default({}))) else 'sudo package not detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_2_1, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.2 | Collect use_pty evidence
+  ansible.builtin.shell: |
+    grep -R -E -- '^[[:space:]]*Defaults[^#]*use_pty([[:space:],]|$)' "{{ cis_sudoers_primary }}" "{{ cis_sudoers_d_path }}" 2>/dev/null
+  register: cis_5_2_2_use_pty_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_2, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_2_evidence:
+      matched_lines: "{{ cis_5_2_2_use_pty_cmd.stdout_lines }}"
+      grep_rc: "{{ cis_5_2_2_use_pty_cmd.rc }}"
+      command: "grep -R -E -- '^[[:space:]]*Defaults[^#]*use_pty([[:space:],]|$)' /etc/sudoers /etc/sudoers.d"
+    cis_5_2_2_result:
+      control_id: "5.2.2"
+      title: "Ensure sudo commands use pty"
+      status: "{{ 'pass' if (cis_5_2_2_use_pty_cmd.stdout_lines | length) > 0 else 'fail' }}"
+      reason: "{{ 'Defaults use_pty directive found' if (cis_5_2_2_use_pty_cmd.stdout_lines | length) > 0 else 'Defaults use_pty directive not found' }}"
+  changed_when: false
+  tags: [cis, cis_5_2_2, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.3 | Collect configured sudo logfile paths
+  ansible.builtin.shell: |
+    grep -R -h -E '^[[:space:]]*Defaults[^#]*logfile[[:space:]]*=' "{{ cis_sudoers_primary }}" "{{ cis_sudoers_d_path }}" 2>/dev/null | \
+    sed -E 's/[[:space:]]*#.*$//' | \
+    awk '{
+      n=split($0, parts, ",")
+      for (i=1; i<=n; i++) {
+        if (parts[i] ~ /logfile[[:space:]]*=/) {
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", parts[i])
+          sub(/.*logfile[[:space:]]*=[[:space:]]*/, "", parts[i])
+          if (parts[i] != "") print parts[i]
+        }
+      }
+    }' | \
+    sed "s/[\"']//g" | \
+    sort -u
+  register: cis_5_2_3_logfile_paths_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_3, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.3 | Stat configured sudo logfile paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ cis_5_2_3_logfile_paths_cmd.stdout_lines }}"
+  register: cis_5_2_3_logfile_stats
+  changed_when: false
+  when: (cis_5_2_3_logfile_paths_cmd.stdout_lines | length) > 0
+  tags: [cis, cis_5_2_3, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.3 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_3_existing_logfiles: "{{ (cis_5_2_3_logfile_stats.results | default([]) | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | map(attribute='stat.path') | list) }}"
+    cis_5_2_3_evidence:
+      configured_logfile_paths: "{{ cis_5_2_3_logfile_paths_cmd.stdout_lines }}"
+      existing_logfile_paths: "{{ (cis_5_2_3_logfile_stats.results | default([]) | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | map(attribute='stat.path') | list) }}"
+      command: "grep Defaults logfile from /etc/sudoers and /etc/sudoers.d"
+    cis_5_2_3_result:
+      control_id: "5.2.3"
+      title: "Ensure sudo log file exists"
+      status: "{{ 'pass' if (cis_5_2_3_logfile_paths_cmd.stdout_lines | length > 0 and (cis_5_2_3_logfile_stats.results | default([]) | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | list | length > 0)) else 'fail' }}"
+      reason: "{{ 'Configured logfile path exists' if (cis_5_2_3_logfile_paths_cmd.stdout_lines | length > 0 and (cis_5_2_3_logfile_stats.results | default([]) | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | list | length > 0)) else 'No existing logfile path found from sudoers configuration' }}"
+  changed_when: false
+  tags: [cis, cis_5_2_3, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.4 | Collect NOPASSWD entries
+  ansible.builtin.shell: |
+    grep -R -E -- '^[[:space:]]*[^#].*NOPASSWD' "{{ cis_sudoers_primary }}" "{{ cis_sudoers_d_path }}" 2>/dev/null
+  register: cis_5_2_4_nopasswd_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_4, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.4 | Classify NOPASSWD entries
+  ansible.builtin.set_fact:
+    cis_5_2_4_allowed_regex: "{{ cis_sudo_allowed_nopasswd_patterns | join('|') }}"
+    cis_5_2_4_unapproved_lines: "{{ cis_5_2_4_nopasswd_cmd.stdout_lines | reject('regex_search', cis_sudo_allowed_nopasswd_patterns | join('|')) | list }}"
+  changed_when: false
+  tags: [cis, cis_5_2_4, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.4 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_4_evidence:
+      nopasswd_lines: "{{ cis_5_2_4_nopasswd_cmd.stdout_lines }}"
+      allowed_exception_patterns: "{{ cis_sudo_allowed_nopasswd_patterns }}"
+      unapproved_nopasswd_lines: "{{ cis_5_2_4_unapproved_lines }}"
+      command: "grep NOPASSWD from /etc/sudoers and /etc/sudoers.d"
+    cis_5_2_4_result:
+      control_id: "5.2.4"
+      title: "Ensure users must provide password for privilege escalation"
+      status: >-
+        {% if (cis_5_2_4_nopasswd_cmd.stdout_lines | length) == 0 %}
+        pass
+        {% elif (cis_5_2_4_unapproved_lines | length) == 0 %}
+        manual_review_required
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_5_2_4_nopasswd_cmd.stdout_lines | length) == 0 %}
+        No NOPASSWD entries detected.
+        {% elif (cis_5_2_4_unapproved_lines | length) == 0 %}
+        Only allowlisted NOPASSWD exceptions were detected; engineer review required.
+        {% else %}
+        Unapproved NOPASSWD entries detected.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_2_4, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.5 | Collect !authenticate entries
+  ansible.builtin.shell: |
+    grep -R -E -- '^[[:space:]]*[^#].*!authenticate' "{{ cis_sudoers_primary }}" "{{ cis_sudoers_d_path }}" 2>/dev/null
+  register: cis_5_2_5_no_auth_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_5, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.5 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_5_evidence:
+      no_auth_lines: "{{ cis_5_2_5_no_auth_cmd.stdout_lines }}"
+      command: "grep !authenticate from /etc/sudoers and /etc/sudoers.d"
+    cis_5_2_5_result:
+      control_id: "5.2.5"
+      title: "Ensure re-authentication for privilege escalation is not disabled globally 585"
+      status: "{{ 'pass' if (cis_5_2_5_no_auth_cmd.stdout_lines | length) == 0 else 'fail' }}"
+      reason: "{{ 'No !authenticate entries detected' if (cis_5_2_5_no_auth_cmd.stdout_lines | length) == 0 else '!authenticate entries detected' }}"
+  changed_when: false
+  tags: [cis, cis_5_2_5, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.6 | Collect sudo -V output
+  ansible.builtin.command: sudo -V
+  register: cis_5_2_6_sudo_version_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_6, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.6 | Collect timestamp_timeout values from sudoers
+  ansible.builtin.shell: |
+    grep -R -h -E '^[[:space:]]*Defaults[^#]*timestamp_timeout[[:space:]]*=' "{{ cis_sudoers_primary }}" "{{ cis_sudoers_d_path }}" 2>/dev/null | \
+    sed -E 's/[[:space:]]*#.*$//' | \
+    awk '{
+      n=split($0, parts, ",")
+      for (i=1; i<=n; i++) {
+        if (parts[i] ~ /timestamp_timeout[[:space:]]*=/) {
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", parts[i])
+          sub(/.*timestamp_timeout[[:space:]]*=[[:space:]]*/, "", parts[i])
+          sub(/[^0-9-].*$/, "", parts[i])
+          if (parts[i] != "") print parts[i]
+        }
+      }
+    }' | sort -u
+  register: cis_5_2_6_timeout_values_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_5_2_6, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.6 | Evaluate timeout values
+  ansible.builtin.set_fact:
+    cis_5_2_6_timeout_values: "{{ cis_5_2_6_timeout_values_cmd.stdout_lines | map('int') | list }}"
+    cis_5_2_6_effective_timeout_match: "{{ (cis_5_2_6_sudo_version_cmd.stdout | regex_findall('Authentication timestamp timeout:[[:space:]]*([0-9-]+)')) | first | default('') }}"
+    cis_5_2_6_invalid_timeouts: "{{ (cis_5_2_6_timeout_values_cmd.stdout_lines | map('int') | select('lt', 0) | list) + (cis_5_2_6_timeout_values_cmd.stdout_lines | map('int') | select('gt', 15) | list) }}"
+  changed_when: false
+  tags: [cis, cis_5_2_6, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.6 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_6_evidence:
+      configured_timeout_values: "{{ cis_5_2_6_timeout_values }}"
+      invalid_timeout_values: "{{ cis_5_2_6_invalid_timeouts }}"
+      effective_timeout_from_sudo_v: "{{ cis_5_2_6_effective_timeout_match }}"
+      sudo_v_rc: "{{ cis_5_2_6_sudo_version_cmd.rc }}"
+      command: "grep timestamp_timeout and sudo -V"
+    cis_5_2_6_result:
+      control_id: "5.2.6"
+      title: "Ensure sudo authentication timeout is configured correctly"
+      status: >-
+        {% if (cis_5_2_6_timeout_values | length) > 0 and (cis_5_2_6_invalid_timeouts | length) == 0 %}
+        pass
+        {% elif (cis_5_2_6_timeout_values | length) > 0 and (cis_5_2_6_invalid_timeouts | length) > 0 %}
+        fail
+        {% elif (cis_5_2_6_effective_timeout_match | length) > 0 and ((cis_5_2_6_effective_timeout_match | int) >= 0) and ((cis_5_2_6_effective_timeout_match | int) <= 15) %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_5_2_6_timeout_values | length) > 0 and (cis_5_2_6_invalid_timeouts | length) == 0 %}
+        timestamp_timeout values are within 0..15.
+        {% elif (cis_5_2_6_timeout_values | length) > 0 and (cis_5_2_6_invalid_timeouts | length) > 0 %}
+        timestamp_timeout values outside 0..15 were found.
+        {% elif (cis_5_2_6_effective_timeout_match | length) > 0 and ((cis_5_2_6_effective_timeout_match | int) >= 0) and ((cis_5_2_6_effective_timeout_match | int) <= 15) %}
+        Effective sudo timeout from sudo -V is within 0..15.
+        {% else %}
+        No acceptable timeout evidence found.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_5_2_6, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.7 | Check /etc/pam.d/su exists
+  ansible.builtin.stat:
+    path: "{{ cis_sudo_pam_su_path }}"
+  register: cis_5_2_7_pam_su_stat
+  changed_when: false
+  tags: [cis, cis_5_2_7, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.7 | Collect pam_wheel lines
+  ansible.builtin.shell: |
+    grep -E -- '^[[:space:]]*auth[[:space:]]+(required|requisite)[[:space:]]+pam_wheel\.so' "{{ cis_sudo_pam_su_path }}" 2>/dev/null
+  register: cis_5_2_7_pam_wheel_cmd
+  failed_when: false
+  changed_when: false
+  when: cis_5_2_7_pam_su_stat.stat.exists
+  tags: [cis, cis_5_2_7, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.7 | Evaluate pam_wheel restriction
+  ansible.builtin.set_fact:
+    cis_5_2_7_valid_lines: "{{ (cis_5_2_7_pam_wheel_cmd.stdout_lines | default([])) | select('regex_search', '\\buse_uid\\b') | select('regex_search', '\\bgroup=\\S+') | list }}"
+  changed_when: false
+  when: cis_5_2_7_pam_su_stat.stat.exists
+  tags: [cis, cis_5_2_7, sudo, chapter_sudo, astra, audit]
+
+- name: 5.2.7 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_5_2_7_evidence:
+      pam_su_exists: "{{ cis_5_2_7_pam_su_stat.stat.exists }}"
+      pam_wheel_lines: "{{ cis_5_2_7_pam_wheel_cmd.stdout_lines | default([]) }}"
+      valid_pam_wheel_lines: "{{ cis_5_2_7_valid_lines | default([]) }}"
+      command: "grep pam_wheel in /etc/pam.d/su"
+    cis_5_2_7_result:
+      control_id: "5.2.7"
+      title: "Ensure access to the su command is restricted"
+      status: "{{ 'pass' if (cis_5_2_7_pam_su_stat.stat.exists and ((cis_5_2_7_valid_lines | default([]) | length) > 0)) else 'fail' }}"
+      reason: "{{ 'pam_wheel use_uid and group restrictions found' if (cis_5_2_7_pam_su_stat.stat.exists and ((cis_5_2_7_valid_lines | default([]) | length) > 0)) else 'pam_wheel restriction with use_uid and group not found' }}"
+  changed_when: false
+  tags: [cis, cis_5_2_7, sudo, chapter_sudo, astra, audit]
+
+- name: SUDO | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_sudo_chapter_summary:
+      chapter_group: SUDO
+      implemented_control_ids:
+      - 5.2.1
+      - 5.2.2
+      - 5.2.3
+      - 5.2.4
+      - 5.2.5
+      - 5.2.6
+      - 5.2.7
+      results:
+        "5.2.1": "{{ cis_5_2_1_result }}"
+        "5.2.2": "{{ cis_5_2_2_result }}"
+        "5.2.3": "{{ cis_5_2_3_result }}"
+        "5.2.4": "{{ cis_5_2_4_result }}"
+        "5.2.5": "{{ cis_5_2_5_result }}"
+        "5.2.6": "{{ cis_5_2_6_result }}"
+        "5.2.7": "{{ cis_5_2_7_result }}"
+      evidence:
+        "5.2.1": "{{ cis_5_2_1_evidence }}"
+        "5.2.2": "{{ cis_5_2_2_evidence }}"
+        "5.2.3": "{{ cis_5_2_3_evidence }}"
+        "5.2.4": "{{ cis_5_2_4_evidence }}"
+        "5.2.5": "{{ cis_5_2_5_evidence }}"
+        "5.2.6": "{{ cis_5_2_6_evidence }}"
+        "5.2.7": "{{ cis_5_2_7_evidence }}"
+  changed_when: false
+  tags: [cis, cis_5_2, sudo, chapter_sudo, astra, audit]

@@ -1,0 +1,89 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+commands:
+  package_manager:
+  - command: dpkg-query
+    purpose: package audit
+  - command: apt-cache
+    purpose: package metadata audit
+  - command: apt-get
+    purpose: guarded package operations only
+  service_manager:
+  - command: systemctl
+    purpose: service state audit
+  sshd:
+  - command: sshd -T
+    purpose: effective sshd configuration audit
+  - command: sshd -t
+    purpose: syntax validation before approved SSH reload
+  sudo:
+  - command: sudo -V
+    purpose: sudo version/defaults audit
+  - command: visudo -c
+    purpose: sudoers syntax audit
+  pam:
+  - command: faillock
+    purpose: faillock status audit
+    status: candidate_untested
+  - command: pam-auth-update
+    purpose: Debian-like PAM profile inspection only
+    status: unknown_unverified
+  cron_at:
+  - command: crontab
+    purpose: cron audit
+  - command: atq
+    purpose: at facility audit
+  time_sync:
+  - command: chronyc
+    purpose: chrony source/status audit
+  - command: timedatectl
+    purpose: time sync state audit
+  logging:
+  - command: journalctl
+    purpose: journald audit
+  - command: rsyslogd -N1
+    purpose: rsyslog syntax audit
+  - command: logrotate -d
+    purpose: logrotate dry-run audit
+  auditd:
+  - command: auditctl
+    purpose: running audit rules audit
+  - command: augenrules
+    purpose: audit rule load/check path; no load without approval
+  bootloader:
+  - command: update-grub
+    purpose: approved remediation only
+  - command: grub-mkconfig
+    purpose: approved remediation only
+  - command: grub2-mkconfig
+    purpose: alternate approved remediation only
+  filesystem_mount_sysctl:
+  - command: findmnt
+    purpose: mount option audit
+  - command: mount
+    purpose: mount evidence audit
+  - command: sysctl
+    purpose: kernel parameter audit
+  kernel_modules:
+  - command: modprobe
+    purpose: module availability audit
+  - command: lsmod
+    purpose: loaded module audit
+command_status_default: candidate_untested_for_astra
+shell_policy: Prefer Ansible facts/modules. Use shell/command only for read-only evidence where no reliable module exists;
+  never use shell for remediation without explicit approval gates.

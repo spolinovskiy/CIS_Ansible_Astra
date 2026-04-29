@@ -1,0 +1,262 @@
+---
+{
+  "metadata": {
+    "schema_version": "canonical-required-information-example-v1",
+    "project_os": "astra",
+    "generated_by_task": "ASTRA-0004",
+    "normalized_by_task": "ASTRA-0004A",
+    "generated_at": "2026-04-27T22:05:01Z",
+    "lab_example_only": true,
+    "production_values_allowed": false,
+    "groups": [
+      "host_identity",
+      "network",
+      "domain_and_authentication",
+      "offline_package_management",
+      "services_and_ports",
+      "logging_and_audit",
+      "filesystem",
+      "ssh",
+      "remediation_safety",
+      "reporting"
+    ]
+  },
+  "example_lab_values": {
+    "host_identity": {
+      "hostname": "lab-astra-localhost.example.lab",
+      "fqdn": "lab-astra-localhost.example.lab",
+      "ip_address": "127.0.0.1",
+      "os_distribution": "Astra Linux",
+      "os_version": "LAB_EXAMPLE_ASTRA_VERSION",
+      "kernel_version": "LAB_EXAMPLE_KERNEL_VERSION",
+      "host_role": "lab_test_host",
+      "server_or_workstation": "workstation",
+      "environment": "lab",
+      "criticality_level": "low",
+      "maintenance_window": "LAB_EXAMPLE: no production maintenance window; remediation disabled"
+    },
+    "network": {
+      "dns_servers": [
+        "192.0.2.10"
+      ],
+      "ntp_servers": [
+        "192.0.2.20"
+      ],
+      "default_gateway": "192.0.2.1",
+      "vlan_or_subnet": "192.0.2.0/24",
+      "allowed_management_subnets": [
+        "192.0.2.0/24"
+      ],
+      "ssh_source_subnets": [
+        "192.0.2.0/24"
+      ],
+      "scada_ot_communication_ports": [
+        {
+          "port": 1502,
+          "protocol": "tcp",
+          "description": "LAB_EXAMPLE placeholder OT protocol test port"
+        }
+      ],
+      "monitoring_siem_ports": [
+        {
+          "port": 514,
+          "protocol": "udp",
+          "description": "LAB_EXAMPLE syslog destination"
+        }
+      ],
+      "backup_ports": [],
+      "domain_controller_ports": [],
+      "repository_server_ports": [
+        {
+          "port": 80,
+          "protocol": "tcp",
+          "description": "LAB_EXAMPLE internal mirror HTTP"
+        }
+      ]
+    },
+    "domain_and_authentication": {
+      "domain_name": "",
+      "netbios_name": "",
+      "domain_controllers": [],
+      "ldap_kerberos_configuration": "",
+      "allowed_admin_users": [
+        "labadmin"
+      ],
+      "allowed_admin_groups": [
+        "sudo"
+      ],
+      "service_accounts": [
+        "zabbix"
+      ],
+      "local_users_that_must_exist": [
+        "labadmin"
+      ],
+      "local_users_that_must_not_be_changed": [
+        "labadmin",
+        "zabbix"
+      ],
+      "sudo_policy_exceptions": [
+        {
+          "account": "zabbix",
+          "reason": "LAB_EXAMPLE monitoring exception; requires production approval if used outside lab"
+        }
+      ],
+      "su_access_policy": "LAB_EXAMPLE: su restricted to approved admin group only; remediation disabled",
+      "password_policy_exceptions": []
+    },
+    "offline_package_management": {
+      "local_repository_url_or_path": "file:///mnt/lab-astra-repo",
+      "mounted_iso_path": "/mnt/lab-astra-iso",
+      "internal_mirror": "http://repo.example.lab/astra",
+      "repository_gpg_key_source": "/mnt/lab-astra-repo/keys/lab-example.gpg",
+      "approved_package_list": [
+        "sudo",
+        "auditd",
+        "rsyslog"
+      ],
+      "prohibited_package_list": [],
+      "package_manager_type": "apt",
+      "update_policy": "NO_CHANGES",
+      "patch_approval_process": "LAB_EXAMPLE: change record LAB-CHANGE-0001; not valid for production",
+      "package_install_allowed_by_ansible": false
+    },
+    "services_and_ports": {
+      "approved_enabled_services": [
+        {
+          "service": "ssh",
+          "owner": "lab operations",
+          "justification": "LAB_EXAMPLE remote administration"
+        },
+        {
+          "service": "rsyslog",
+          "owner": "lab operations",
+          "justification": "LAB_EXAMPLE central log forwarding"
+        }
+      ],
+      "approved_listening_ports": [
+        {
+          "port": 22,
+          "protocol": "tcp",
+          "service": "ssh",
+          "justification": "LAB_EXAMPLE administrative access"
+        },
+        {
+          "port": 514,
+          "protocol": "udp",
+          "service": "rsyslog",
+          "justification": "LAB_EXAMPLE log forwarding"
+        }
+      ],
+      "service_owner_business_justification": [
+        {
+          "service": "ssh",
+          "owner": "lab operations",
+          "justification": "LAB_EXAMPLE remote administration"
+        }
+      ],
+      "services_that_must_not_be_stopped": [
+        "ssh",
+        "rsyslog",
+        "auditd"
+      ],
+      "services_that_may_be_masked": [],
+      "services_that_are_audit_only": [
+        "ssh",
+        "auditd"
+      ],
+      "scada_exceptions": [],
+      "hmi_exceptions": [],
+      "historian_exceptions": [],
+      "engineering_workstation_exceptions": [],
+      "siem_exceptions": [
+        "rsyslog forwarding must remain enabled in this lab example"
+      ],
+      "antivirus_exceptions": [],
+      "backup_exceptions": [],
+      "domain_dns_ntp_exceptions": [
+        "LAB_EXAMPLE NTP source must not be changed without approval"
+      ]
+    },
+    "logging_and_audit": {
+      "local_log_retention": "LAB_EXAMPLE: retain local logs for 30 days",
+      "auditd_policy": "LAB_EXAMPLE: auditd audit-only; do not restart automatically",
+      "max_audit_log_size": "128M",
+      "action_when_audit_logs_are_full": "LAB_EXAMPLE: rotate and alert; do not halt",
+      "remote_syslog_siem_destination": "192.0.2.30:514/udp",
+      "journald_or_rsyslog_preference": "rsyslog",
+      "logrotate_policy": "LAB_EXAMPLE: use existing distro policy; do not modify in remediation"
+    },
+    "filesystem": {
+      "partition_layout": "LAB_EXAMPLE: single-root lab VM layout",
+      "mount_points": [
+        {
+          "path": "/",
+          "filesystem": "ext4"
+        },
+        {
+          "path": "/tmp",
+          "filesystem": "ext4"
+        }
+      ],
+      "mount_options": [
+        {
+          "path": "/tmp",
+          "options": [
+            "nodev",
+            "nosuid",
+            "noexec"
+          ]
+        }
+      ],
+      "removable_media_policy": "LAB_EXAMPLE: audit-only, no automatic disablement",
+      "usb_storage_policy": "LAB_EXAMPLE: audit-only, no automatic module blacklist",
+      "paths_excluded_from_remediation": [
+        "/opt/vendor",
+        "/var/lib/application-data"
+      ]
+    },
+    "ssh": {
+      "allowed_ssh_users": [
+        "labadmin"
+      ],
+      "allowed_ssh_groups": [
+        "sudo"
+      ],
+      "allowed_source_subnets": [
+        "192.0.2.0/24"
+      ],
+      "banner_file": "/etc/issue.net",
+      "root_login_prohibited": true,
+      "emergency_access_procedure": "LAB_EXAMPLE: local console access available; not valid for production"
+    },
+    "remediation_safety": {
+      "audit_only_controls": [
+        "all controls unless explicitly approved in a separate change record"
+      ],
+      "controls_allowed_for_automatic_remediation": [],
+      "controls_requiring_engineer_approval": [
+        "service changes",
+        "package changes",
+        "SSH changes",
+        "PAM/sudo/account changes",
+        "filesystem mount or permission changes",
+        "audit/logging changes"
+      ],
+      "controls_requiring_reboot": [],
+      "controls_requiring_service_restart": [
+        "ssh",
+        "auditd",
+        "rsyslog"
+      ],
+      "rollback_procedure": "LAB_EXAMPLE: VM snapshot before remediation; manual rollback only",
+      "backup_snapshot_requirement": "LAB_EXAMPLE: take disposable lab VM snapshot before any remediation test",
+      "engineer_approver": "LAB_EXAMPLE approver role; no production authority"
+    },
+    "reporting": {
+      "report_destination": "reports/lab",
+      "evidence_retention_period": "LAB_EXAMPLE: 30 days",
+      "naming_convention": "lab_<hostname>_<YYYYMMDD>_<run_id>",
+      "responsible_approver": "LAB_EXAMPLE approver role; no production authority"
+    }
+  }
+}

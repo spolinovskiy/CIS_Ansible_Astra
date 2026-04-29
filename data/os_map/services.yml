@@ -1,0 +1,127 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+service_management:
+  manager: systemd
+  status: likely_but_unverified_for_astra
+  query_command: systemctl
+services:
+  sshd:
+    primary_unit: ssh.service
+    alternate_units:
+    - sshd.service
+    package_set: ssh_server
+    status: candidate_untested
+    ot_notes: Do not restart or restrict SSH without approved management access and rollback.
+  sudo:
+    primary_unit: null
+    alternate_units: []
+    package_set: sudo
+    status: not_a_daemon
+  pam:
+    primary_unit: null
+    alternate_units: []
+    package_set: pam
+    status: not_a_daemon
+  cron:
+    primary_unit: cron.service
+    alternate_units:
+    - crond.service
+    package_set: cron_at
+    status: candidate_untested
+  atd:
+    primary_unit: atd.service
+    alternate_units: []
+    package_set: cron_at
+    status: candidate_untested
+  chrony:
+    primary_unit: chrony.service
+    alternate_units:
+    - chronyd.service
+    package_set: time_sync
+    status: candidate_untested
+  systemd_timesyncd:
+    primary_unit: systemd-timesyncd.service
+    alternate_units: []
+    package_set: time_sync
+    status: candidate_untested
+  journald:
+    primary_unit: systemd-journald.service
+    alternate_units: []
+    package_set: logging
+    status: candidate_untested
+  rsyslog:
+    primary_unit: rsyslog.service
+    alternate_units: []
+    package_set: logging
+    status: candidate_untested
+  auditd:
+    primary_unit: auditd.service
+    alternate_units: []
+    package_set: audit
+    status: candidate_untested
+  systemd_journal_upload:
+    primary_unit: systemd-journal-upload.service
+    alternate_units: []
+    package_set: logging
+    status: candidate_untested
+  systemd_journal_remote:
+    primary_unit: systemd-journal-remote.service
+    alternate_units: []
+    package_set: logging
+    status: candidate_untested
+  bootloader:
+    primary_unit: null
+    alternate_units: []
+    package_set: bootloader
+    status: not_a_daemon
+  filesystem_mount_sysctl:
+    primary_unit: null
+    alternate_units: []
+    package_set: filesystem_mount_sysctl
+    status: not_a_daemon
+  kernel_modules:
+    primary_unit: null
+    alternate_units: []
+    package_set: kernel_modules
+    status: not_a_daemon
+service_change_guards:
+  remediation_enabled:
+    default: false
+    required_for:
+    - any file change
+    - any package install or removal
+    - any service enable disable restart reload
+    - any bootloader update
+    - any sysctl persistence change
+  package_install_allowed:
+    default: false
+    required_for:
+    - installing missing packages
+    - updating packages
+    - removing packages
+  local_repository_defined:
+    default: false
+    required_for:
+    - apt package installation
+    - apt package upgrade
+    - apt package removal where package metadata is needed
+  service_restart_allowed:
+    default: false
+    required_for:
+    - service restart
+    - service reload where disruptive

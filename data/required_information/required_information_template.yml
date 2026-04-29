@@ -1,0 +1,765 @@
+---
+{
+  "metadata": {
+    "schema_version": "canonical-required-information-v1",
+    "project_os": "astra",
+    "generated_by_task": "ASTRA-0004",
+    "normalized_by_task": "ASTRA-0004A",
+    "generated_at": "2026-04-27T22:05:01Z",
+    "source_scope": "linux_cis.xlsx",
+    "purpose": "Collect environment-specific information required before safe audit or remediation in an offline industrial OT network.",
+    "valid_requirement_levels": [
+      "environment_specific",
+      "optional",
+      "required_before_audit",
+      "required_before_remediation"
+    ],
+    "groups": [
+      "host_identity",
+      "network",
+      "domain_and_authentication",
+      "offline_package_management",
+      "services_and_ports",
+      "logging_and_audit",
+      "filesystem",
+      "ssh",
+      "remediation_safety",
+      "reporting"
+    ],
+    "production_values_allowed": false
+  },
+  "required_information": {
+    "host_identity": [
+      {
+        "name": "hostname",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<HOSTNAME>",
+        "why_needed": "Correlates facts, reports, evidence files, and approval records to the correct host.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "fqdn",
+        "requirement_level": "environment_specific",
+        "placeholder": "<FQDN_OR_EMPTY_IF_NOT_USED>",
+        "why_needed": "Required when DNS, domain membership, SIEM, or certificate identity uses FQDNs.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "ip_address",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<MANAGEMENT_IP_ADDRESS>",
+        "why_needed": "Confirms the audited host matches the approved target and management route.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "os_distribution",
+        "requirement_level": "required_before_audit",
+        "placeholder": "Astra Linux",
+        "why_needed": "Ensures the project is executed only for Astra Linux hosts.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "os_version",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<ASTRA_VERSION>",
+        "why_needed": "Selects version-specific mappings and blocks unsupported versions safely.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "kernel_version",
+        "requirement_level": "optional",
+        "placeholder": "<KERNEL_VERSION_IF_KNOWN>",
+        "why_needed": "Helps interpret kernel module, filesystem, and hardening evidence.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "host_role",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<SCADA_SERVER|HMI|HISTORIAN|ENGINEERING_WORKSTATION|DOMAIN_SERVICE|MONITORING|OTHER>",
+        "why_needed": "Determines applicable OT exceptions, service baselines, and reporting context.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "server_or_workstation",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<server|workstation>",
+        "why_needed": "Separates server and workstation baselines and remediation risk.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "environment",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<lab|prod>",
+        "why_needed": "Distinguishes lab/prod behavior, report destination, and approval expectations.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "criticality_level",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<low|medium|high|critical>",
+        "why_needed": "Drives audit scheduling, remediation gating, and evidence review priority.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "maintenance_window",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<APPROVED_WINDOW_OR_CHANGE_ID>",
+        "why_needed": "Prevents disruptive changes outside an approved industrial window.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "network": [
+      {
+        "name": "dns_servers",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required where DNS configuration is audited or domain/SIEM/repository names are used.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "ntp_servers",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required for time-sync controls and log/audit evidence correlation.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "default_gateway",
+        "requirement_level": "optional",
+        "placeholder": "<DEFAULT_GATEWAY_OR_EMPTY>",
+        "why_needed": "Helps review routing assumptions without requiring Internet access.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "vlan_or_subnet",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<VLAN_OR_SUBNET>",
+        "why_needed": "Confirms the host is in the approved OT/lab segment.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "allowed_management_subnets",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents firewall, service, or SSH changes from blocking management access.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "ssh_source_subnets",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before enforcing SSH source restrictions or interpreting SSH exposure.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "scada_ot_communication_ports",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves required SCADA/HMI/historian communication during services and ports review.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "monitoring_siem_ports",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Prevents breaking monitoring, syslog, SIEM, or audit forwarding paths.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "backup_ports",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Prevents disruption of backup agents and recovery workflows.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "domain_controller_ports",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required where AD/LDAP/Kerberos/domain services are present.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "repository_server_ports",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required when offline package sources are network repositories or internal mirrors.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "domain_and_authentication": [
+      {
+        "name": "domain_name",
+        "requirement_level": "environment_specific",
+        "placeholder": "<DOMAIN_NAME_OR_EMPTY>",
+        "why_needed": "Required for domain membership, PAM, LDAP, Kerberos, sudo, and account exceptions.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "netbios_name",
+        "requirement_level": "environment_specific",
+        "placeholder": "<NETBIOS_NAME_OR_EMPTY>",
+        "why_needed": "Required only where legacy domain or Samba/Winbind integration uses NetBIOS names.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "domain_controllers",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Prevents authentication outages and supports domain-related audit evidence.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "ldap_kerberos_configuration",
+        "requirement_level": "environment_specific",
+        "placeholder": "<LDAP_KERBEROS_CONFIG_REFERENCE_OR_EMPTY>",
+        "why_needed": "Required before changing PAM, NSS, Kerberos, LDAP, or domain auth files.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "allowed_admin_users",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents removal or lockout of approved administrative access.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "allowed_admin_groups",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before enforcing sudo, su, SSH, or privileged group restrictions.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "service_accounts",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents disabling accounts required by SCADA, backup, monitoring, antivirus, or domain services.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "local_users_that_must_exist",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Protects locally required operator, emergency, or vendor accounts.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "local_users_that_must_not_be_changed",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Blocks unsafe password, shell, lock, or expiry changes to critical local accounts.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "sudo_policy_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required for controls involving sudo, including documented exceptions such as passwordless monitoring commands.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "su_access_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<SU_ACCESS_POLICY>",
+        "why_needed": "Required before applying su group restrictions.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "password_policy_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required where system, service, vendor, or emergency accounts have approved deviations.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "offline_package_management": [
+      {
+        "name": "local_repository_url_or_path",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<LOCAL_REPO_URL_OR_FILE_PATH>",
+        "why_needed": "Package install/remove/update remediation must use only approved offline sources.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "mounted_iso_path",
+        "requirement_level": "environment_specific",
+        "placeholder": "<MOUNTED_ISO_PATH_OR_EMPTY>",
+        "why_needed": "Required when the approved source is mounted installation media.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "internal_mirror",
+        "requirement_level": "environment_specific",
+        "placeholder": "<INTERNAL_MIRROR_OR_EMPTY>",
+        "why_needed": "Required when packages are served by a customer-approved mirror.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "repository_gpg_key_source",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<LOCAL_GPG_KEY_SOURCE>",
+        "why_needed": "Verifies package trust without relying on Internet key retrieval.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "approved_package_list",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents unauthorized package installation and supports package controls.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "prohibited_package_list",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required where site policy forbids specific packages beyond CIS scope.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "package_manager_type",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<ASTRA_PACKAGE_MANAGER>",
+        "why_needed": "Confirms package audit commands and module choices for Astra Linux.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "update_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<NO_CHANGES|INSTALL_ONLY|REMOVE_ONLY|PATCH_WITH_APPROVAL>",
+        "why_needed": "Defines whether Ansible may install, remove, or update packages.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "patch_approval_process",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<CHANGE_PROCESS_REFERENCE>",
+        "why_needed": "Ensures package changes follow site approval and change-control rules.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "package_install_allowed_by_ansible",
+        "requirement_level": "required_before_remediation",
+        "placeholder": false,
+        "why_needed": "Explicitly gates all package-changing remediation in offline mode.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "services_and_ports": [
+      {
+        "name": "approved_enabled_services",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before disabling, masking, or removing any service.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "approved_listening_ports",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before treating listening ports as unauthorized.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "service_owner_business_justification",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Documents why approved services must remain active.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "services_that_must_not_be_stopped",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Protects SCADA, HMI, historian, SIEM, antivirus, backup, domain, DNS, NTP, and monitoring services.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "services_that_may_be_masked",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Required only when masking is explicitly approved for specific services.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "services_that_are_audit_only",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Identifies services that may be assessed but never changed by automation.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "scada_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves required SCADA processes and ports.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "hmi_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves HMI availability and operator workflows.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "historian_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves historian collection and data retention.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "engineering_workstation_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves engineering toolchains, vendor tools, and field access paths.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "siem_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves log forwarding, agents, and collectors.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "antivirus_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves endpoint protection agents and update mechanisms.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "backup_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves backup scheduling, agents, and network paths.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "domain_dns_ntp_exceptions",
+        "requirement_level": "environment_specific",
+        "placeholder": [],
+        "why_needed": "Preserves identity, name resolution, and time synchronization.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "logging_and_audit": [
+      {
+        "name": "local_log_retention",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<LOCAL_LOG_RETENTION_POLICY>",
+        "why_needed": "Prevents retention changes that violate site or regulatory requirements.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "auditd_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<AUDITD_POLICY_REFERENCE>",
+        "why_needed": "Required before changing audit rules, auditd service behavior, or audit failure mode.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "max_audit_log_size",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<MAX_AUDIT_LOG_SIZE>",
+        "why_needed": "Prevents audit disk exhaustion or unintended evidence loss.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "action_when_audit_logs_are_full",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<ACTION_ON_FULL_AUDIT_LOGS>",
+        "why_needed": "Defines whether the system halts, rotates, ignores, or alerts when audit logs fill.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "remote_syslog_siem_destination",
+        "requirement_level": "environment_specific",
+        "placeholder": "<SIEM_OR_SYSLOG_DESTINATION_OR_EMPTY>",
+        "why_needed": "Required where logs are forwarded to SIEM or central syslog.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "journald_or_rsyslog_preference",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<journald|rsyslog|both|site_defined>",
+        "why_needed": "Prevents changing the wrong logging stack for Astra deployment.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "logrotate_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<LOGROTATE_POLICY_REFERENCE>",
+        "why_needed": "Protects retention, compression, and rotation behavior.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "filesystem": [
+      {
+        "name": "partition_layout",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<PARTITION_LAYOUT_REFERENCE>",
+        "why_needed": "Supports filesystem, mount option, and free-space interpretation.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "mount_points",
+        "requirement_level": "required_before_audit",
+        "placeholder": [],
+        "why_needed": "Required to audit mount options and filesystem controls correctly.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "mount_options",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before changing /etc/fstab or remounting filesystems.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "removable_media_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<REMOVABLE_MEDIA_POLICY>",
+        "why_needed": "Required before disabling or restricting removable media.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "usb_storage_policy",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<USB_STORAGE_POLICY>",
+        "why_needed": "Required before blocking USB storage or kernel modules.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "paths_excluded_from_remediation",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Protects application, vendor, historian, backup, and evidence paths from permission changes.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "ssh": [
+      {
+        "name": "allowed_ssh_users",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents administrator lockout when enforcing SSH user restrictions.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "allowed_ssh_groups",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents lockout when using group-based SSH restrictions.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "allowed_source_subnets",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Required before restricting SSH by source network or firewall rules.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "banner_file",
+        "requirement_level": "environment_specific",
+        "placeholder": "<SSH_BANNER_FILE_OR_EMPTY>",
+        "why_needed": "Required where remote-login warning banner content or path is site-specific.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "root_login_prohibited",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<true|false|site_defined>",
+        "why_needed": "Must be explicit before changing root SSH login behavior.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "emergency_access_procedure",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<EMERGENCY_ACCESS_PROCEDURE_REFERENCE>",
+        "why_needed": "Required before any SSH or authentication remediation that could block remote access.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "remediation_safety": [
+      {
+        "name": "audit_only_controls",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Ensures controls forbidden for automation stay audit-only.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "controls_allowed_for_automatic_remediation",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Explicitly authorizes the limited set of controls automation may change.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "controls_requiring_engineer_approval",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Defines which controls need recorded approval before change.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "controls_requiring_reboot",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents unplanned restarts and supports maintenance planning.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "controls_requiring_service_restart",
+        "requirement_level": "required_before_remediation",
+        "placeholder": [],
+        "why_needed": "Prevents unapproved restarts of critical industrial services.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "rollback_procedure",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<ROLLBACK_PROCEDURE_REFERENCE>",
+        "why_needed": "Required to recover if remediation has unexpected impact.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "backup_snapshot_requirement",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<BACKUP_OR_SNAPSHOT_REQUIREMENT>",
+        "why_needed": "Ensures restorable state exists before potentially disruptive changes.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "engineer_approver",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<APPROVER_ROLE_OR_RECORD_REFERENCE>",
+        "why_needed": "Records the accountable person authorizing changes.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ],
+    "reporting": [
+      {
+        "name": "report_destination",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<REPORT_DESTINATION_PATH>",
+        "why_needed": "Defines where audit reports and evidence are written.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "evidence_retention_period",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<EVIDENCE_RETENTION_PERIOD>",
+        "why_needed": "Ensures audit artifacts are retained for the required period.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "naming_convention",
+        "requirement_level": "required_before_audit",
+        "placeholder": "<ENV_HOST_DATE_RUNID_CONVENTION>",
+        "why_needed": "Keeps reports traceable by environment, host, date, and run ID.",
+        "sensitive": false,
+        "example_allowed": true
+      },
+      {
+        "name": "responsible_approver",
+        "requirement_level": "required_before_remediation",
+        "placeholder": "<APPROVER_ROLE_OR_RECORD_REFERENCE>",
+        "why_needed": "Links reports, deviations, and remediation approvals to an accountable person.",
+        "sensitive": false,
+        "example_allowed": true
+      }
+    ]
+  }
+}

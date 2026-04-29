@@ -1,0 +1,7 @@
+---
+- name: Astra CIS precheck
+  hosts: astra_linux
+  gather_facts: true
+  roles:
+    - role: cis_precheck
+      tags: [precheck, astra]

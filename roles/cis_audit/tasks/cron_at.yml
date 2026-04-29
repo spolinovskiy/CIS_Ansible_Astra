@@ -1,0 +1,321 @@
+---
+- name: Cron&At | Load Astra OS path map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/paths.yml"
+    name: cis_os_paths
+  changed_when: false
+  tags: [cis, cis_2_4, cron_at, chapter_cron_at, astra, audit]
+
+- name: Cron&At | Load Astra OS service map
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/os_map/services.yml"
+    name: cis_os_services
+  changed_when: false
+  tags: [cis, cis_2_4, cron_at, chapter_cron_at, astra, audit]
+
+- name: Cron&At | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_cron_primary_unit: "{{ cis_os_services.services.cron.primary_unit | default('cron.service') }}"
+    cis_cron_alternate_units: "{{ cis_os_services.services.cron.alternate_units | default(['crond.service']) }}"
+    cis_cron_units_all: "{{ [cis_os_services.services.cron.primary_unit | default('cron.service')] + (cis_os_services.services.cron.alternate_units | default(['crond.service'])) }}"
+    cis_crontab_path: "{{ cis_os_paths.paths.cron_at.crontab | default('/etc/crontab') }}"
+    cis_cron_dir_map:
+      "2.4.1.3": { path: "{{ cis_os_paths.paths.cron_at.cron_hourly | default('/etc/cron.hourly') }}", title: "Ensure permissions on /etc/cron.hourly are configured" }
+      "2.4.1.4": { path: "{{ cis_os_paths.paths.cron_at.cron_daily | default('/etc/cron.daily') }}", title: "Ensure permissions on /etc/cron.daily are configured" }
+      "2.4.1.5": { path: "{{ cis_os_paths.paths.cron_at.cron_weekly | default('/etc/cron.weekly') }}", title: "Ensure permissions on /etc/cron.weekly are configured" }
+      "2.4.1.6": { path: "{{ cis_os_paths.paths.cron_at.cron_monthly | default('/etc/cron.monthly') }}", title: "Ensure permissions on /etc/cron.monthly are configured" }
+      "2.4.1.7": { path: "{{ cis_os_paths.paths.cron_at.cron_d | default('/etc/cron.d') }}", title: "Ensure permissions on /etc/cron.d are configured" }
+    cis_cron_allow_path: "{{ cis_os_paths.paths.cron_at.cron_allow | default('/etc/cron.allow') }}"
+    cis_cron_deny_path: "{{ cis_os_paths.paths.cron_at.cron_deny | default('/etc/cron.deny') }}"
+    cis_at_allow_path: "{{ cis_os_paths.paths.cron_at.at_allow | default('/etc/at.allow') }}"
+    cis_at_deny_path: "{{ cis_os_paths.paths.cron_at.at_deny | default('/etc/at.deny') }}"
+    cis_cron_allowed_users_baseline: "{{ cis_cron_allowed_users_baseline | default([]) }}"
+    cis_at_allowed_users_baseline: "{{ cis_at_allowed_users_baseline | default([]) }}"
+    cis_cron_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:cicd_or_ops_approved_cron_allowed_users"
+    - "MISSING_OT_BASELINE:cicd_or_ops_approved_at_allowed_users"
+    - "MISSING_OS_VALIDATION:cron_service_unit_name_for_target_astra_versions"
+  changed_when: false
+  tags: [cis, cis_2_4, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.1 | Collect cron service unit status evidence
+  ansible.builtin.command: "systemctl show {{ item }} --property=Id,LoadState,UnitFileState,ActiveState --no-pager"
+  loop: "{{ cis_cron_units_all | unique }}"
+  register: cis_2_4_1_1_unit_show_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_4_1_1, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_4_1_1_known_units: "{{ (cis_2_4_1_1_unit_show_cmd.results | default([])) | rejectattr('stdout', 'search', 'LoadState=not-found') | list }}"
+    cis_2_4_1_1_enabled_active_units: "{{ (cis_2_4_1_1_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+    cis_2_4_1_1_evidence:
+      candidate_units: "{{ cis_cron_units_all | unique }}"
+      known_units: "{{ (cis_2_4_1_1_unit_show_cmd.results | default([])) | rejectattr('stdout', 'search', 'LoadState=not-found') | map(attribute='item') | list }}"
+      enabled_active_units: "{{ (cis_2_4_1_1_unit_show_cmd.results | default([])) | selectattr('stdout', 'search', 'UnitFileState=enabled') | selectattr('stdout', 'search', 'ActiveState=active') | map(attribute='item') | list }}"
+      command: "systemctl show <unit> --property=Id,LoadState,UnitFileState,ActiveState"
+      missing_information_placeholders:
+      - "MISSING_OS_VALIDATION:cron_service_unit_name_for_target_astra_versions"
+    cis_2_4_1_1_result:
+      control_id: "2.4.1.1"
+      title: "Ensure cron daemon is enabled and active"
+      status: >-
+        {% if (cis_2_4_1_1_known_units | length) == 0 %}
+        manual_review_required
+        {% elif (cis_2_4_1_1_enabled_active_units | length) > 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if (cis_2_4_1_1_known_units | length) == 0 %}
+        No expected cron service unit detected from mapped candidates; OS-specific unit verification required.
+        {% elif (cis_2_4_1_1_enabled_active_units | length) > 0 %}
+        At least one mapped cron unit is enabled and active.
+        {% else %}
+        Mapped cron units were found but none are both enabled and active.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_2_4_1_1, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.2 | Stat /etc/crontab
+  ansible.builtin.stat:
+    path: "{{ cis_crontab_path }}"
+  register: cis_2_4_1_2_crontab_stat
+  changed_when: false
+  tags: [cis, cis_2_4_1_2, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.2 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_4_1_2_evidence:
+      path: "{{ cis_crontab_path }}"
+      exists: "{{ cis_2_4_1_2_crontab_stat.stat.exists | default(false) }}"
+      owner: "{{ cis_2_4_1_2_crontab_stat.stat.pw_name | default('unknown') }}"
+      group: "{{ cis_2_4_1_2_crontab_stat.stat.gr_name | default('unknown') }}"
+      mode: "{{ cis_2_4_1_2_crontab_stat.stat.mode | default('unknown') }}"
+      expected_owner: "root"
+      expected_group: "root"
+      expected_mode: "0600"
+    cis_2_4_1_2_result:
+      control_id: "2.4.1.2"
+      title: "Ensure permissions on /etc/crontab are configured"
+      status: "{{ 'pass' if (cis_2_4_1_2_crontab_stat.stat.exists | default(false) and cis_2_4_1_2_crontab_stat.stat.pw_name == 'root' and cis_2_4_1_2_crontab_stat.stat.gr_name == 'root' and cis_2_4_1_2_crontab_stat.stat.mode == '0600') else 'fail' }}"
+      reason: "{{ 'Ownership and mode match expected root:root 0600' if (cis_2_4_1_2_crontab_stat.stat.exists | default(false) and cis_2_4_1_2_crontab_stat.stat.pw_name == 'root' and cis_2_4_1_2_crontab_stat.stat.gr_name == 'root' and cis_2_4_1_2_crontab_stat.stat.mode == '0600') else 'Expected root:root 0600 not satisfied for crontab path' }}"
+  changed_when: false
+  tags: [cis, cis_2_4_1_2, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.3-2.4.1.7 | Stat cron directories
+  ansible.builtin.stat:
+    path: "{{ item.value.path }}"
+  loop: "{{ cis_cron_dir_map | dict2items }}"
+  register: cis_2_4_1_3_7_stat
+  changed_when: false
+  tags: [cis, cis_2_4_1_3, cis_2_4_1_4, cis_2_4_1_5, cis_2_4_1_6, cis_2_4_1_7, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.3-2.4.1.7 | Build per-control facts
+  ansible.builtin.set_fact:
+    cis_cron_dir_result_map: >-
+      {{
+        (cis_cron_dir_result_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass' if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == 'root'
+                  and (item.stat.gr_name | default('')) == 'root'
+                  and (item.stat.mode | default('')) == '0700'
+                ) else 'fail'
+              ),
+              'reason': (
+                'Ownership and mode match expected root:root 0700'
+                if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == 'root'
+                  and (item.stat.gr_name | default('')) == 'root'
+                  and (item.stat.mode | default('')) == '0700'
+                ) else 'Expected root:root 0700 not satisfied'
+              ),
+              'evidence': {
+                'path': item.item.value.path,
+                'exists': (item.stat.exists | default(false)),
+                'owner': (item.stat.pw_name | default('unknown')),
+                'group': (item.stat.gr_name | default('unknown')),
+                'mode': (item.stat.mode | default('unknown')),
+                'expected_owner': 'root',
+                'expected_group': 'root',
+                'expected_mode': '0700'
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_2_4_1_3_7_stat.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_2_4_1_3, cis_2_4_1_4, cis_2_4_1_5, cis_2_4_1_6, cis_2_4_1_7, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.8 | Stat cron allow/deny files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+  - "{{ cis_cron_allow_path }}"
+  - "{{ cis_cron_deny_path }}"
+  register: cis_2_4_1_8_cron_allow_deny_stat
+  changed_when: false
+  tags: [cis, cis_2_4_1_8, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.8 | Read cron allow file
+  ansible.builtin.command: "awk 'NF && $1 !~ /^#/' {{ cis_cron_allow_path }}"
+  register: cis_2_4_1_8_cron_allow_users_cmd
+  failed_when: false
+  changed_when: false
+  when: (cis_2_4_1_8_cron_allow_deny_stat.results[0].stat.exists | default(false))
+  tags: [cis, cis_2_4_1_8, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.1.8 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_4_1_8_cron_allow_stat: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[0].stat }}"
+    cis_2_4_1_8_cron_deny_stat: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[1].stat }}"
+    cis_2_4_1_8_allow_users: "{{ cis_2_4_1_8_cron_allow_users_cmd.stdout_lines | default([]) }}"
+    cis_2_4_1_8_unapproved_users: "{{ (cis_2_4_1_8_cron_allow_users_cmd.stdout_lines | default([])) | difference(cis_cron_allowed_users_baseline | default([])) }}"
+    cis_2_4_1_8_evidence:
+      cron_allow_path: "{{ cis_cron_allow_path }}"
+      cron_deny_path: "{{ cis_cron_deny_path }}"
+      cron_allow_exists: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[0].stat.exists | default(false) }}"
+      cron_deny_exists: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[1].stat.exists | default(false) }}"
+      cron_allow_owner: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[0].stat.pw_name | default('unknown') }}"
+      cron_allow_group: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[0].stat.gr_name | default('unknown') }}"
+      cron_allow_mode: "{{ cis_2_4_1_8_cron_allow_deny_stat.results[0].stat.mode | default('unknown') }}"
+      cron_allow_users: "{{ cis_2_4_1_8_cron_allow_users_cmd.stdout_lines | default([]) }}"
+      approved_baseline_users: "{{ cis_cron_allowed_users_baseline }}"
+      unapproved_users_vs_baseline: "{{ (cis_2_4_1_8_cron_allow_users_cmd.stdout_lines | default([])) | difference(cis_cron_allowed_users_baseline | default([])) }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:cicd_or_ops_approved_cron_allowed_users"
+    cis_2_4_1_8_result:
+      control_id: "2.4.1.8"
+      title: "Ensure crontab is restricted to authorized users"
+      status: >-
+        {% if not (cis_2_4_1_8_cron_allow_stat.exists | default(false)) or (cis_2_4_1_8_cron_deny_stat.exists | default(false)) %}
+        fail
+        {% elif (cis_cron_allowed_users_baseline | length) == 0 %}
+        manual_review_required
+        {% elif (cis_2_4_1_8_unapproved_users | length) == 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if not (cis_2_4_1_8_cron_allow_stat.exists | default(false)) or (cis_2_4_1_8_cron_deny_stat.exists | default(false)) %}
+        cron.allow must exist and cron.deny must not exist.
+        {% elif (cis_cron_allowed_users_baseline | length) == 0 %}
+        Baseline for authorized cron users is not provided; manual review required.
+        {% elif (cis_2_4_1_8_unapproved_users | length) == 0 %}
+        cron.allow users are within approved baseline.
+        {% else %}
+        Unapproved users found in cron.allow against approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_2_4_1_8, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.2.1 | Stat at allow/deny files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+  - "{{ cis_at_allow_path }}"
+  - "{{ cis_at_deny_path }}"
+  register: cis_2_4_2_1_at_allow_deny_stat
+  changed_when: false
+  tags: [cis, cis_2_4_2_1, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.2.1 | Read at allow file
+  ansible.builtin.command: "awk 'NF && $1 !~ /^#/' {{ cis_at_allow_path }}"
+  register: cis_2_4_2_1_at_allow_users_cmd
+  failed_when: false
+  changed_when: false
+  when: (cis_2_4_2_1_at_allow_deny_stat.results[0].stat.exists | default(false))
+  tags: [cis, cis_2_4_2_1, cron_at, chapter_cron_at, astra, audit]
+
+- name: 2.4.2.1 | Build evidence and result
+  ansible.builtin.set_fact:
+    cis_2_4_2_1_at_allow_stat: "{{ cis_2_4_2_1_at_allow_deny_stat.results[0].stat }}"
+    cis_2_4_2_1_at_deny_stat: "{{ cis_2_4_2_1_at_allow_deny_stat.results[1].stat }}"
+    cis_2_4_2_1_at_allow_users: "{{ cis_2_4_2_1_at_allow_users_cmd.stdout_lines | default([]) }}"
+    cis_2_4_2_1_unapproved_users: "{{ (cis_2_4_2_1_at_allow_users_cmd.stdout_lines | default([])) | difference(cis_at_allowed_users_baseline | default([])) }}"
+    cis_2_4_2_1_evidence:
+      at_allow_path: "{{ cis_at_allow_path }}"
+      at_deny_path: "{{ cis_at_deny_path }}"
+      at_allow_exists: "{{ cis_2_4_2_1_at_allow_deny_stat.results[0].stat.exists | default(false) }}"
+      at_deny_exists: "{{ cis_2_4_2_1_at_allow_deny_stat.results[1].stat.exists | default(false) }}"
+      at_allow_owner: "{{ cis_2_4_2_1_at_allow_deny_stat.results[0].stat.pw_name | default('unknown') }}"
+      at_allow_group: "{{ cis_2_4_2_1_at_allow_deny_stat.results[0].stat.gr_name | default('unknown') }}"
+      at_allow_mode: "{{ cis_2_4_2_1_at_allow_deny_stat.results[0].stat.mode | default('unknown') }}"
+      at_allow_users: "{{ cis_2_4_2_1_at_allow_users_cmd.stdout_lines | default([]) }}"
+      approved_baseline_users: "{{ cis_at_allowed_users_baseline }}"
+      unapproved_users_vs_baseline: "{{ (cis_2_4_2_1_at_allow_users_cmd.stdout_lines | default([])) | difference(cis_at_allowed_users_baseline | default([])) }}"
+      missing_information_placeholders:
+      - "MISSING_OT_BASELINE:cicd_or_ops_approved_at_allowed_users"
+    cis_2_4_2_1_result:
+      control_id: "2.4.2.1"
+      title: "Ensure at is restricted to authorized users"
+      status: >-
+        {% if not (cis_2_4_2_1_at_allow_stat.exists | default(false)) or (cis_2_4_2_1_at_deny_stat.exists | default(false)) %}
+        fail
+        {% elif (cis_at_allowed_users_baseline | length) == 0 %}
+        manual_review_required
+        {% elif (cis_2_4_2_1_unapproved_users | length) == 0 %}
+        pass
+        {% else %}
+        fail
+        {% endif %}
+      reason: >-
+        {% if not (cis_2_4_2_1_at_allow_stat.exists | default(false)) or (cis_2_4_2_1_at_deny_stat.exists | default(false)) %}
+        at.allow must exist and at.deny must not exist.
+        {% elif (cis_at_allowed_users_baseline | length) == 0 %}
+        Baseline for authorized at users is not provided; manual review required.
+        {% elif (cis_2_4_2_1_unapproved_users | length) == 0 %}
+        at.allow users are within approved baseline.
+        {% else %}
+        Unapproved users found in at.allow against approved baseline.
+        {% endif %}
+  changed_when: false
+  tags: [cis, cis_2_4_2_1, cron_at, chapter_cron_at, astra, audit]
+
+- name: Cron&At | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_cron_at_chapter_summary:
+      chapter_group: "Cron&At"
+      implemented_control_ids:
+      - 2.4.1.1
+      - 2.4.1.2
+      - 2.4.1.3
+      - 2.4.1.4
+      - 2.4.1.5
+      - 2.4.1.6
+      - 2.4.1.7
+      - 2.4.1.8
+      - 2.4.2.1
+      results:
+        "2.4.1.1": "{{ cis_2_4_1_1_result }}"
+        "2.4.1.2": "{{ cis_2_4_1_2_result }}"
+        "2.4.1.3": "{{ cis_cron_dir_result_map['2.4.1.3'] }}"
+        "2.4.1.4": "{{ cis_cron_dir_result_map['2.4.1.4'] }}"
+        "2.4.1.5": "{{ cis_cron_dir_result_map['2.4.1.5'] }}"
+        "2.4.1.6": "{{ cis_cron_dir_result_map['2.4.1.6'] }}"
+        "2.4.1.7": "{{ cis_cron_dir_result_map['2.4.1.7'] }}"
+        "2.4.1.8": "{{ cis_2_4_1_8_result }}"
+        "2.4.2.1": "{{ cis_2_4_2_1_result }}"
+      evidence:
+        "2.4.1.1": "{{ cis_2_4_1_1_evidence }}"
+        "2.4.1.2": "{{ cis_2_4_1_2_evidence }}"
+        "2.4.1.3": "{{ cis_cron_dir_result_map['2.4.1.3'].evidence }}"
+        "2.4.1.4": "{{ cis_cron_dir_result_map['2.4.1.4'].evidence }}"
+        "2.4.1.5": "{{ cis_cron_dir_result_map['2.4.1.5'].evidence }}"
+        "2.4.1.6": "{{ cis_cron_dir_result_map['2.4.1.6'].evidence }}"
+        "2.4.1.7": "{{ cis_cron_dir_result_map['2.4.1.7'].evidence }}"
+        "2.4.1.8": "{{ cis_2_4_1_8_evidence }}"
+        "2.4.2.1": "{{ cis_2_4_2_1_evidence }}"
+      missing_information_placeholders: "{{ cis_cron_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_2_4, cron_at, chapter_cron_at, astra, audit]

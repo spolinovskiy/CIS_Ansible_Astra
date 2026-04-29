@@ -1,0 +1,107 @@
+---
+metadata:
+  schema_version: canonical-os-map-v1
+  project_os: astra
+  generated_by_task: ASTRA-0005
+  generated_at: '2026-04-27T22:08:37Z'
+  authoritative_scope: data/cis_linux_scope/controls_from_excel.json
+  inputs:
+  - data/cis_linux_scope/controls_from_excel.json
+  - data/source_scripts/mapped_script_logic.yml
+  - data/required_information/required_information_template.yml
+  - PRD.json
+  reference_only_documents:
+  - CIS_Debian_Linux_12_Benchmark_v1.1.0.pdf
+  - CIS_Ubuntu_Linux_20.04_LTS_Benchmark_v1.1.0.pdf
+  scope_rule: OS mapping supports only controls already present in linux_cis.xlsx; reference PDFs do not add scope.
+  implementation_rule: Mapping data only; no CIS controls or remediation tasks are implemented by ASTRA-0005.
+features:
+  ansible_fact_detection:
+    enabled: true
+    facts:
+    - ansible_distribution
+    - ansible_distribution_version
+    - ansible_distribution_major_version
+    - ansible_os_family
+    - ansible_kernel
+    status: required
+  package_manager:
+    family: apt_dpkg
+    status: likely_but_unverified_for_astra
+    guards:
+    - package_install_allowed
+    - local_repository_defined
+    - remediation_enabled
+  service_manager:
+    family: systemd
+    status: likely_but_unverified_for_astra
+  sshd:
+    supported: true
+    status: candidate_untested
+    service_key: sshd
+  sudo:
+    supported: true
+    status: candidate_untested
+    service_key: sudo
+  pam:
+    supported: true
+    status: candidate_untested
+    notes: Debian-like common-* paths require Astra validation before remediation.
+  cron_at:
+    supported: true
+    status: candidate_untested
+  chrony:
+    supported: true
+    status: candidate_untested
+  systemd_timesyncd:
+    supported: true
+    status: candidate_untested
+  journald:
+    supported: true
+    status: candidate_untested
+  rsyslog:
+    supported: true
+    status: candidate_untested
+  auditd:
+    supported: true
+    status: candidate_untested
+  bootloader_grub:
+    supported: true
+    status: candidate_untested
+    notes: BIOS/UEFI path must be detected per host.
+  filesystem_mounts:
+    supported: true
+    status: candidate_untested
+  sysctl:
+    supported: true
+    status: candidate_untested
+  kernel_modules:
+    supported: true
+    status: candidate_untested
+global_guards:
+  remediation_enabled:
+    default: false
+    required_for:
+    - any file change
+    - any package install or removal
+    - any service enable disable restart reload
+    - any bootloader update
+    - any sysctl persistence change
+  package_install_allowed:
+    default: false
+    required_for:
+    - installing missing packages
+    - updating packages
+    - removing packages
+  local_repository_defined:
+    default: false
+    required_for:
+    - apt package installation
+    - apt package upgrade
+    - apt package removal where package metadata is needed
+unknown_feature_policy:
+  audit: allow read-only evidence collection when Astra distribution is detected and the version is candidate or unknown;
+    report version_status explicitly
+  remediation: block unless version is approved in required information and all remediation guards are true
+  package_install: block unless package_install_allowed, local_repository_defined, remediation_enabled, maintenance window,
+    and approval data are true

@@ -1,0 +1,31 @@
+# CIS Audit Checklist
+
+## Host Metadata
+- Inventory host: `{{ cis_host_checklist.metadata.inventory_hostname }}`
+- Ansible host: `{{ cis_host_checklist.metadata.ansible_host }}`
+- Inventory groups: `{{ cis_host_checklist.metadata.inventory_groups | join(', ') }}`
+- Project OS: `{{ cis_host_checklist.metadata.project_os }}`
+- Source scope: `{{ cis_host_checklist.metadata.source_scope }}`
+- Report environment: `{{ cis_host_checklist.metadata.report_environment }}`
+- Generated at UTC: `{{ cis_host_checklist.metadata.generated_at_utc }}`
+
+## Summary
+- Total controls: `{{ cis_host_checklist.summary.total_controls }}`
+- PASS: `{{ cis_host_checklist.summary.pass }}`
+- FAIL: `{{ cis_host_checklist.summary.fail }}`
+- MANUAL_REVIEW_REQUIRED: `{{ cis_host_checklist.summary.manual_review_required }}`
+- MANUAL_SCOPE_ONLY: `{{ cis_host_checklist.summary.manual_scope_only }}`
+- NEEDS_SCOPE_CLARIFICATION: `{{ cis_host_checklist.summary.needs_scope_clarification }}`
+- NOT_ASSESSED: `{{ cis_host_checklist.summary.not_assessed }}`
+- UNKNOWN: `{{ cis_host_checklist.summary.unknown }}`
+
+## Controls by Chapter
+{% for chapter in cis_host_checklist.chapters %}
+### {{ chapter.chapter_group }}
+| Control ID | Title | Status Mark | Audit Status | Scope Class | Reason |
+|---|---|---|---|---|---|
+{% for control in chapter.controls %}
+| `{{ control.control_id }}` | {{ control.control_title | replace('|', '\\|') }} | `{{ control.status_mark }}` | `{{ control.audit_status }}` | `{{ control.implementation_class }}` | {{ control.result_reason | replace('|', '\\|') }} |
+{% endfor %}
+
+{% endfor %}
