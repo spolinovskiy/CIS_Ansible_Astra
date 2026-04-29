@@ -176,3 +176,4 @@
 - Created reports/lab/LocalUsersAndGroups/chapter_report.md with required sections and mandatory engineer approval line.
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
 2026-04-29T10:10:00Z PRD scheduler normalization + private overlay model: marked approved implementation tasks as done to align with completed engineer-approval gates (ASTRA-1003/1004/1005 and ASTRA-3003), and implemented universal sensitive-data approach with gitignored private overlays, optional vault-ready file loading in cis_common, and documented strategy/templates for non-GitHub OT data.
+2026-04-29T10:20:00Z Local Users and Groups chapter workflow closure: added ASTRA-2006 review artifact, recorded ASTRA-3006 engineer approval state, and normalized ASTRA-1006 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
