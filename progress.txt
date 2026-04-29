@@ -194,3 +194,4 @@
 - Added explicit OT-safe placeholders for approved password aging thresholds, approved hashing algorithms, approved inactive lock threshold, and approved last-change exceptions.
 - Created reports/lab/Passwords/chapter_report.md with required sections and mandatory engineer approval line.
 - Validation: PRD validation executed; ansible-playbook availability limitation remains applicable when missing.
+2026-04-29T11:00:00Z Passwords chapter workflow closure: added ASTRA-2008 review artifact, recorded ASTRA-3008 engineer approval state, and normalized ASTRA-1008 implementation state to done for scheduler progression while preserving audit-only placeholders/defaults.
