@@ -1,0 +1,146 @@
+---
+- name: Services | Load authoritative linux_cis scope
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/cis_linux_scope/controls_from_excel.yml"
+    name: cis_scope_data
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: Services | Build scoped SERVICES control list and placeholders
+  ansible.builtin.set_fact:
+    cis_services_controls: >-
+      {{
+        (cis_scope_data.controls | default([]))
+        | selectattr('record_type', 'equalto', 'control')
+        | selectattr('sheet_name', 'equalto', 'SERVICES')
+        | list
+      }}
+    cis_services_automated_map:
+      "2.1.1": { service_units: ["autofs.service"], listen_patterns: [] }
+      "2.1.2": { service_units: ["avahi-daemon.service"], listen_patterns: [":5353", "mdns"] }
+      "2.1.3": { service_units: ["isc-dhcp-server.service", "dhcpd.service", "dhcpd6.service"], listen_patterns: [":67", ":68", ":547"] }
+      "2.1.4": { service_units: ["named.service", "bind9.service"], listen_patterns: [":53"] }
+      "2.1.5": { service_units: ["dnsmasq.service"], listen_patterns: [":53", ":67"] }
+      "2.1.6": { service_units: ["vsftpd.service", "proftpd.service"], listen_patterns: [":21"] }
+      "2.1.7": { service_units: ["slapd.service"], listen_patterns: [":389", ":636"] }
+      "2.1.8": { service_units: ["dovecot.service", "cyrus-imapd.service"], listen_patterns: [":110", ":143", ":993", ":995"] }
+      "2.1.9": { service_units: ["nfs-server.service", "nfs-kernel-server.service"], listen_patterns: [":2049"] }
+      "2.1.10": { service_units: ["ypserv.service"], listen_patterns: ["nis"] }
+      "2.1.11": { service_units: ["cups.service", "cupsd.service"], listen_patterns: [":631"] }
+      "2.1.12": { service_units: ["rpcbind.service"], listen_patterns: [":111"] }
+    cis_services_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_services_allowlist"
+    - "MISSING_OT_BASELINE:approved_service_port_exceptions"
+    - "MISSING_OT_BASELINE:approved_local_only_mta_baseline"
+    - "MISSING_OT_BASELINE:approved_network_listening_services"
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: Services | Gather package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: Services | Gather service facts
+  ansible.builtin.service_facts:
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: 2.1-2.2 | Collect listening socket evidence
+  ansible.builtin.command: ss -lntup
+  register: cis_services_ss_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_2_1, cis_2_2, services, chapter_services, astra, audit]
+
+- name: Services | Initialize chapter result and evidence maps
+  ansible.builtin.set_fact:
+    cis_services_results_map: {}
+    cis_services_evidence_map: {}
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: Services | Build per-control results and evidence
+  ansible.builtin.set_fact:
+    cis_services_results_map: "{{ cis_services_results_map | combine({ cis_services_control_id: cis_services_result_entry }, recursive=True) }}"
+    cis_services_evidence_map: "{{ cis_services_evidence_map | combine({ cis_services_control_id: cis_services_evidence_entry }, recursive=True) }}"
+  vars:
+    cis_services_control_id: "{{ item.cis_control_id }}"
+    cis_services_control_title: "{{ item.cis_control_title }}"
+    cis_services_impl_class: "{{ item.implementation_class | default('needs_scope_clarification') }}"
+    cis_services_auto_item: "{{ cis_services_automated_map.get(cis_services_control_id, {}) }}"
+    cis_services_service_units: "{{ cis_services_auto_item.service_units | default([]) }}"
+    cis_services_listening_patterns: "{{ cis_services_auto_item.listen_patterns | default([]) }}"
+    cis_services_present_units: "{{ cis_services_service_units | select('in', (ansible_facts.services.keys() | list)) | list }}"
+    cis_services_listening_lines: "{{ cis_services_ss_cmd.stdout_lines | default([]) }}"
+    cis_services_listening_matches: >-
+      {{
+        cis_services_listening_lines
+        | select('search', (cis_services_listening_patterns | join('|')) if (cis_services_listening_patterns | length > 0) else '^$')
+        | list
+      }}
+    cis_services_is_automated_candidate: "{{ cis_services_control_id in cis_services_automated_map }}"
+    cis_services_result_entry: >-
+      {% if cis_services_is_automated_candidate %}
+      {{ {
+        'control_id': cis_services_control_id,
+        'title': cis_services_control_title,
+        'status': ('pass' if (cis_services_present_units | length) == 0 and (cis_services_listening_matches | length) == 0 else 'fail'),
+        'reason': (
+          'No matching service units are detected and no matching listening sockets were detected'
+          if (cis_services_present_units | length) == 0 and (cis_services_listening_matches | length) == 0
+          else 'Service units or listening sockets indicate the service may be in use'
+        )
+      } }}
+      {% elif cis_services_impl_class == 'manual_review' %}
+      {{ {
+        'control_id': cis_services_control_id,
+        'title': cis_services_control_title,
+        'status': 'manual_review_required',
+        'reason': 'Control is explicitly marked manual in linux_cis scope and requires engineer review.'
+      } }}
+      {% else %}
+      {{ {
+        'control_id': cis_services_control_id,
+        'title': cis_services_control_title,
+        'status': 'manual_review_required',
+        'reason': 'Control is marked needs_scope_clarification in linux_cis scope and is left manual for OT-safe validation.'
+      } }}
+      {% endif %}
+    cis_services_evidence_entry:
+      control_id: "{{ cis_services_control_id }}"
+      title: "{{ cis_services_control_title }}"
+      implementation_class: "{{ cis_services_impl_class }}"
+      normalized_scope_status: "{{ item.normalized_status | default('') }}"
+      audit_hint_from_excel: "{{ item.audit_hint_from_excel | default('') }}"
+      monitored_service_units: "{{ cis_services_service_units }}"
+      detected_service_units: "{{ cis_services_present_units }}"
+      service_facts_subset: >-
+        {{
+          dict(
+            cis_services_present_units
+            | zip(cis_services_present_units | map('extract', ansible_facts.services) | list)
+          )
+        }}
+      listening_patterns: "{{ cis_services_listening_patterns }}"
+      listening_matches: "{{ cis_services_listening_matches }}"
+      commands:
+      - "service_facts"
+      - "package_facts"
+      - "ss -lntup"
+      missing_information_placeholders: "{{ cis_services_missing_information_placeholders }}"
+  loop: "{{ cis_services_controls }}"
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]
+
+- name: Services | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_services_chapter_summary:
+      chapter_group: SERVICES
+      implemented_control_ids: "{{ cis_services_controls | map(attribute='cis_control_id') | list }}"
+      results: "{{ cis_services_results_map }}"
+      evidence: "{{ cis_services_evidence_map }}"
+      missing_information_placeholders: "{{ cis_services_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, services, chapter_services, astra, audit]

@@ -1638,14 +1638,19 @@
         "ASTRA-0005",
         "ASTRA-3015"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet SERVICES; detected 30 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/services.yml",
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_report/tasks/main.yml",
+        "reports/lab/Services/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T04:19:30Z",
+      "comments": "Implemented audit-only SERVICES chapter from linux_cis.xlsx sheet SERVICES with scope-locked control filtering, offline-safe host-local checks, explicit OT placeholders, report merge wiring, and no remediation/restart/reboot actions."
     },
     {
       "task_id": "ASTRA-2016",

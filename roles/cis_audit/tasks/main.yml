@@ -23,6 +23,10 @@
   ansible.builtin.include_tasks: logging.yml
   tags: [cis, audit, astra, logging, chapter_logging]
 
+- name: Audit | Execute Services chapter controls
+  ansible.builtin.include_tasks: services.yml
+  tags: [cis, audit, astra, services, chapter_services]
+
 - name: Audit | Execute Filesystem chapter controls
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]

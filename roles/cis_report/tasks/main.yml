@@ -67,6 +67,20 @@
   changed_when: false
   tags: [cis, report, astra]
 
+- name: Report | Merge Services results map
+  ansible.builtin.set_fact:
+    cis_report_results_map: "{{ (cis_report_results_map | default({})) | combine(cis_services_chapter_summary.results | default({}), recursive=True) }}"
+  when: cis_services_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Merge Services evidence map
+  ansible.builtin.set_fact:
+    cis_report_evidence_map: "{{ (cis_report_evidence_map | default({})) | combine(cis_services_chapter_summary.evidence | default({}), recursive=True) }}"
+  when: cis_services_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
 - name: Report | Initialize checklist controls list
   ansible.builtin.set_fact:
     cis_report_controls: []
