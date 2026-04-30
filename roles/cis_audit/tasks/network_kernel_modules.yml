@@ -1,0 +1,319 @@
+---
+- name: Network Kernel Modules | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_nkm_module_controls:
+      "3.2.1":
+        module: dccp
+        title: Ensure dccp kernel module is not available
+      "3.2.2":
+        module: tipc
+        title: Ensure tipc kernel module is not available
+      "3.2.3":
+        module: rds
+        title: Ensure rds kernel module is not available
+      "3.2.4":
+        module: sctp
+        title: Ensure sctp kernel module is not available
+    cis_nkm_sysctl_controls:
+      "3.3.1":
+        title: Ensure ip forwarding is disabled
+        checks:
+        - key: net.ipv4.ip_forward
+          expected: "0"
+      "3.3.2":
+        title: Ensure packet redirect sending is disabled
+        checks:
+        - key: net.ipv4.conf.all.send_redirects
+          expected: "0"
+      "3.3.3":
+        title: Ensure bogus icmp responses are ignored
+        checks:
+        - key: net.ipv4.icmp_ignore_bogus_error_responses
+          expected: "1"
+      "3.3.4":
+        title: Ensure broadcast icmp requests are ignored
+        checks:
+        - key: net.ipv4.icmp_echo_ignore_broadcasts
+          expected: "1"
+      "3.3.5":
+        title: Ensure icmp redirects are not accepted
+        checks:
+        - key: net.ipv4.conf.all.accept_redirects
+          expected: "0"
+        - key: net.ipv4.conf.default.accept_redirects
+          expected: "0"
+        - key: net.ipv6.conf.all.accept_redirects
+          expected: "0"
+        - key: net.ipv6.conf.default.accept_redirects
+          expected: "0"
+      "3.3.6":
+        title: Ensure secure icmp redirects are not accepted
+        checks:
+        - key: net.ipv4.conf.all.secure_redirects
+          expected: "0"
+        - key: net.ipv4.conf.default.secure_redirects
+          expected: "0"
+      "3.3.7":
+        title: Ensure reverse path filtering is enabled
+        checks:
+        - key: net.ipv4.conf.all.rp_filter
+          expected: "1"
+        - key: net.ipv4.conf.default.rp_filter
+          expected: "1"
+      "3.3.8":
+        title: Ensure source routed packets are not accepted
+        checks:
+        - key: net.ipv4.conf.all.accept_source_route
+          expected: "0"
+        - key: net.ipv4.conf.default.accept_source_route
+          expected: "0"
+        - key: net.ipv6.conf.all.accept_source_route
+          expected: "0"
+        - key: net.ipv6.conf.default.accept_source_route
+          expected: "0"
+      "3.3.9":
+        title: Ensure suspicious packets are logged
+        checks:
+        - key: net.ipv4.conf.all.log_martians
+          expected: "1"
+        - key: net.ipv4.conf.default.log_martians
+          expected: "1"
+      "3.3.10":
+        title: Ensure tcp syn cookies is enabled
+        checks:
+        - key: net.ipv4.tcp_syncookies
+          expected: "1"
+      "3.3.11":
+        title: Ensure ipv6 router advertisements are not accepted
+        checks:
+        - key: net.ipv6.conf.all.accept_ra
+          expected: "0"
+        - key: net.ipv6.conf.default.accept_ra
+          expected: "0"
+    cis_nkm_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_router_forwarding_exceptions"
+    - "MISSING_OT_BASELINE:approved_network_kernel_module_exceptions"
+    - "MISSING_OT_BASELINE:approved_network_sysctl_exceptions"
+  changed_when: false
+  tags: [cis, cis_3_2, cis_3_3, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.2.1-3.2.4 | Collect modprobe probe output
+  ansible.builtin.command: "modprobe -n -v {{ item.value.module }}"
+  loop: "{{ cis_nkm_module_controls | dict2items }}"
+  register: cis_3_2_modprobe_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_2_1, cis_3_2_2, cis_3_2_3, cis_3_2_4, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.2.1-3.2.4 | Collect loaded module state
+  ansible.builtin.shell: |
+    lsmod | awk '{print $1}' | grep -x '{{ item.value.module }}'
+  loop: "{{ cis_nkm_module_controls | dict2items }}"
+  register: cis_3_2_lsmod_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_2_1, cis_3_2_2, cis_3_2_3, cis_3_2_4, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.2.1-3.2.4 | Collect modprobe.d policy evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E -h -- '^\s*(blacklist|install)\s+{{ item.value.module }}\b' /etc/modprobe.d/*.conf 2>/dev/null || true
+  loop: "{{ cis_nkm_module_controls | dict2items }}"
+  register: cis_3_2_modprobe_policy_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_2_1, cis_3_2_2, cis_3_2_3, cis_3_2_4, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.2.1-3.2.4 | Build per-control module results
+  ansible.builtin.set_fact:
+    cis_nkm_module_result_map: >-
+      {{
+        (cis_nkm_module_result_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass'
+                if (
+                  ((cis_3_2_lsmod_cmd.results[ansible_loop.index0].rc | default(1)) != 0)
+                  and (
+                    ((item.rc | default(1)) != 0)
+                    or ((item.stdout | default('')) is search('/bin/(true|false)'))
+                    or ((cis_3_2_modprobe_policy_cmd.results[ansible_loop.index0].stdout | default('')) is search('^\s*blacklist\s+' ~ item.item.value.module ~ '\b'))
+                    or ((cis_3_2_modprobe_policy_cmd.results[ansible_loop.index0].stdout | default('')) is search('^\s*install\s+' ~ item.item.value.module ~ '\s+/bin/(true|false)\b'))
+                  )
+                )
+                else 'fail'
+              ),
+              'reason': (
+                'Module is not loaded and appears blocked or unavailable'
+                if (
+                  ((cis_3_2_lsmod_cmd.results[ansible_loop.index0].rc | default(1)) != 0)
+                  and (
+                    ((item.rc | default(1)) != 0)
+                    or ((item.stdout | default('')) is search('/bin/(true|false)'))
+                    or ((cis_3_2_modprobe_policy_cmd.results[ansible_loop.index0].stdout | default('')) is search('^\s*blacklist\s+' ~ item.item.value.module ~ '\b'))
+                    or ((cis_3_2_modprobe_policy_cmd.results[ansible_loop.index0].stdout | default('')) is search('^\s*install\s+' ~ item.item.value.module ~ '\s+/bin/(true|false)\b'))
+                  )
+                )
+                else 'Module is loaded or appears loadable without a blocking policy'
+              ),
+              'evidence': {
+                'module': item.item.value.module,
+                'modprobe_probe_rc': (item.rc | default(1)),
+                'modprobe_probe_stdout': (item.stdout | default('')),
+                'loaded_match_rc': (cis_3_2_lsmod_cmd.results[ansible_loop.index0].rc | default(1)),
+                'loaded_module_output': (cis_3_2_lsmod_cmd.results[ansible_loop.index0].stdout | default('')),
+                'modprobe_policy_lines': (cis_3_2_modprobe_policy_cmd.results[ansible_loop.index0].stdout_lines | default([])),
+                'command_probe': 'modprobe -n -v <module>',
+                'command_loaded': 'lsmod | awk "{print $1}" | grep -x <module>',
+                'command_policy': 'grep blacklist/install in /etc/modprobe.d/*.conf',
+                'missing_information_placeholders': ['MISSING_OT_BASELINE:approved_network_kernel_module_exceptions']
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_3_2_modprobe_cmd.results | default([]) }}"
+  changed_when: false
+  loop_control:
+    extended: true
+  tags: [cis, cis_3_2_1, cis_3_2_2, cis_3_2_3, cis_3_2_4, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.3.1-3.3.11 | Collect all sysctl values
+  ansible.builtin.command: "sysctl {{ item }}"
+  loop: "{{ (cis_nkm_sysctl_controls | dict2items | map(attribute='value.checks') | flatten | map(attribute='key') | list | unique) }}"
+  register: cis_3_3_sysctl_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_3_1, cis_3_3_2, cis_3_3_3, cis_3_3_4, cis_3_3_5, cis_3_3_6, cis_3_3_7, cis_3_3_8, cis_3_3_9, cis_3_3_10, cis_3_3_11, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.3.1-3.3.11 | Build sysctl value map
+  ansible.builtin.set_fact:
+    cis_nkm_sysctl_values_map: "{{ (cis_nkm_sysctl_values_map | default({})) | combine({ item.item: (item.stdout | regex_search('=\\s*(\\S+)$', '\\1') | first | default('')) }, recursive=True) }}"
+  loop: "{{ cis_3_3_sysctl_cmd.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_3_3_1, cis_3_3_2, cis_3_3_3, cis_3_3_4, cis_3_3_5, cis_3_3_6, cis_3_3_7, cis_3_3_8, cis_3_3_9, cis_3_3_10, cis_3_3_11, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.3.1-3.3.11 | Build per-control sysctl results
+  ansible.builtin.set_fact:
+    cis_nkm_sysctl_result_map: >-
+      {{
+        (cis_nkm_sysctl_result_map | default({}))
+        | combine({
+            item.key: {
+              'control_id': item.key,
+              'title': item.value.title,
+              'status': (
+                'pass'
+                if ((item.value.checks | map(attribute='key') | map('extract', cis_nkm_sysctl_values_map | default({})) | list) == (item.value.checks | map(attribute='expected') | list))
+                else 'fail'
+              ),
+              'reason': (
+                'All required sysctl keys match expected values'
+                if ((item.value.checks | map(attribute='key') | map('extract', cis_nkm_sysctl_values_map | default({})) | list) == (item.value.checks | map(attribute='expected') | list))
+                else 'One or more required sysctl keys are missing or do not match expected values'
+              ),
+              'evidence': {
+                'checks': (item.value.checks | list),
+                'observed_values': (item.value.checks | map(attribute='key') | zip(item.value.checks | map(attribute='key') | map('extract', cis_nkm_sysctl_values_map | default({}))) | list),
+                'command': 'sysctl <key>',
+                'missing_information_placeholders': ['MISSING_OT_BASELINE:approved_network_sysctl_exceptions']
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_nkm_sysctl_controls | dict2items }}"
+  changed_when: false
+  tags: [cis, cis_3_3_1, cis_3_3_2, cis_3_3_3, cis_3_3_4, cis_3_3_5, cis_3_3_6, cis_3_3_7, cis_3_3_8, cis_3_3_9, cis_3_3_10, cis_3_3_11, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: 3.2.1-3.3.11 | Materialize control facts
+  ansible.builtin.set_fact:
+    cis_3_2_1_result: "{{ cis_nkm_module_result_map['3.2.1'] }}"
+    cis_3_2_2_result: "{{ cis_nkm_module_result_map['3.2.2'] }}"
+    cis_3_2_3_result: "{{ cis_nkm_module_result_map['3.2.3'] }}"
+    cis_3_2_4_result: "{{ cis_nkm_module_result_map['3.2.4'] }}"
+    cis_3_3_1_result: "{{ cis_nkm_sysctl_result_map['3.3.1'] }}"
+    cis_3_3_2_result: "{{ cis_nkm_sysctl_result_map['3.3.2'] }}"
+    cis_3_3_3_result: "{{ cis_nkm_sysctl_result_map['3.3.3'] }}"
+    cis_3_3_4_result: "{{ cis_nkm_sysctl_result_map['3.3.4'] }}"
+    cis_3_3_5_result: "{{ cis_nkm_sysctl_result_map['3.3.5'] }}"
+    cis_3_3_6_result: "{{ cis_nkm_sysctl_result_map['3.3.6'] }}"
+    cis_3_3_7_result: "{{ cis_nkm_sysctl_result_map['3.3.7'] }}"
+    cis_3_3_8_result: "{{ cis_nkm_sysctl_result_map['3.3.8'] }}"
+    cis_3_3_9_result: "{{ cis_nkm_sysctl_result_map['3.3.9'] }}"
+    cis_3_3_10_result: "{{ cis_nkm_sysctl_result_map['3.3.10'] }}"
+    cis_3_3_11_result: "{{ cis_nkm_sysctl_result_map['3.3.11'] }}"
+    cis_3_2_1_evidence: "{{ cis_nkm_module_result_map['3.2.1'].evidence }}"
+    cis_3_2_2_evidence: "{{ cis_nkm_module_result_map['3.2.2'].evidence }}"
+    cis_3_2_3_evidence: "{{ cis_nkm_module_result_map['3.2.3'].evidence }}"
+    cis_3_2_4_evidence: "{{ cis_nkm_module_result_map['3.2.4'].evidence }}"
+    cis_3_3_1_evidence: "{{ cis_nkm_sysctl_result_map['3.3.1'].evidence }}"
+    cis_3_3_2_evidence: "{{ cis_nkm_sysctl_result_map['3.3.2'].evidence }}"
+    cis_3_3_3_evidence: "{{ cis_nkm_sysctl_result_map['3.3.3'].evidence }}"
+    cis_3_3_4_evidence: "{{ cis_nkm_sysctl_result_map['3.3.4'].evidence }}"
+    cis_3_3_5_evidence: "{{ cis_nkm_sysctl_result_map['3.3.5'].evidence }}"
+    cis_3_3_6_evidence: "{{ cis_nkm_sysctl_result_map['3.3.6'].evidence }}"
+    cis_3_3_7_evidence: "{{ cis_nkm_sysctl_result_map['3.3.7'].evidence }}"
+    cis_3_3_8_evidence: "{{ cis_nkm_sysctl_result_map['3.3.8'].evidence }}"
+    cis_3_3_9_evidence: "{{ cis_nkm_sysctl_result_map['3.3.9'].evidence }}"
+    cis_3_3_10_evidence: "{{ cis_nkm_sysctl_result_map['3.3.10'].evidence }}"
+    cis_3_3_11_evidence: "{{ cis_nkm_sysctl_result_map['3.3.11'].evidence }}"
+  changed_when: false
+  tags: [cis, cis_3_2, cis_3_3, network_kernel_modules, chapter_network_kernel_modules, astra, audit]
+
+- name: Network Kernel Modules | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_network_kernel_modules_chapter_summary:
+      chapter_group: Network Kernel Modules
+      implemented_control_ids:
+      - 3.2.1
+      - 3.2.2
+      - 3.2.3
+      - 3.2.4
+      - 3.3.1
+      - 3.3.2
+      - 3.3.3
+      - 3.3.4
+      - 3.3.5
+      - 3.3.6
+      - 3.3.7
+      - 3.3.8
+      - 3.3.9
+      - 3.3.10
+      - 3.3.11
+      results:
+        "3.2.1": "{{ cis_3_2_1_result }}"
+        "3.2.2": "{{ cis_3_2_2_result }}"
+        "3.2.3": "{{ cis_3_2_3_result }}"
+        "3.2.4": "{{ cis_3_2_4_result }}"
+        "3.3.1": "{{ cis_3_3_1_result }}"
+        "3.3.2": "{{ cis_3_3_2_result }}"
+        "3.3.3": "{{ cis_3_3_3_result }}"
+        "3.3.4": "{{ cis_3_3_4_result }}"
+        "3.3.5": "{{ cis_3_3_5_result }}"
+        "3.3.6": "{{ cis_3_3_6_result }}"
+        "3.3.7": "{{ cis_3_3_7_result }}"
+        "3.3.8": "{{ cis_3_3_8_result }}"
+        "3.3.9": "{{ cis_3_3_9_result }}"
+        "3.3.10": "{{ cis_3_3_10_result }}"
+        "3.3.11": "{{ cis_3_3_11_result }}"
+      evidence:
+        "3.2.1": "{{ cis_3_2_1_evidence }}"
+        "3.2.2": "{{ cis_3_2_2_evidence }}"
+        "3.2.3": "{{ cis_3_2_3_evidence }}"
+        "3.2.4": "{{ cis_3_2_4_evidence }}"
+        "3.3.1": "{{ cis_3_3_1_evidence }}"
+        "3.3.2": "{{ cis_3_3_2_evidence }}"
+        "3.3.3": "{{ cis_3_3_3_evidence }}"
+        "3.3.4": "{{ cis_3_3_4_evidence }}"
+        "3.3.5": "{{ cis_3_3_5_evidence }}"
+        "3.3.6": "{{ cis_3_3_6_evidence }}"
+        "3.3.7": "{{ cis_3_3_7_evidence }}"
+        "3.3.8": "{{ cis_3_3_8_evidence }}"
+        "3.3.9": "{{ cis_3_3_9_evidence }}"
+        "3.3.10": "{{ cis_3_3_10_evidence }}"
+        "3.3.11": "{{ cis_3_3_11_evidence }}"
+      missing_information_placeholders: "{{ cis_nkm_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_3_2, cis_3_3, network_kernel_modules, chapter_network_kernel_modules, astra, audit]

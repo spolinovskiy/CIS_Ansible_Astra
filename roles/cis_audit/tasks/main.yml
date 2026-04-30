@@ -15,6 +15,10 @@
   ansible.builtin.include_tasks: banners.yml
   tags: [cis, audit, astra, banners, chapter_banners]
 
+- name: Audit | Execute Network Kernel Modules chapter controls
+  ansible.builtin.include_tasks: network_kernel_modules.yml
+  tags: [cis, audit, astra, network_kernel_modules, chapter_network_kernel_modules]
+
 - name: Audit | Execute Filesystem chapter controls
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]

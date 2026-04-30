@@ -39,6 +39,20 @@
   changed_when: false
   tags: [cis, report, astra]
 
+- name: Report | Merge Network Kernel Modules results map
+  ansible.builtin.set_fact:
+    cis_report_results_map: "{{ (cis_report_results_map | default({})) | combine(cis_network_kernel_modules_chapter_summary.results | default({}), recursive=True) }}"
+  when: cis_network_kernel_modules_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
+- name: Report | Merge Network Kernel Modules evidence map
+  ansible.builtin.set_fact:
+    cis_report_evidence_map: "{{ (cis_report_evidence_map | default({})) | combine(cis_network_kernel_modules_chapter_summary.evidence | default({}), recursive=True) }}"
+  when: cis_network_kernel_modules_chapter_summary is defined
+  changed_when: false
+  tags: [cis, report, astra]
+
 - name: Report | Initialize checklist controls list
   ansible.builtin.set_fact:
     cis_report_controls: []

@@ -1484,14 +1484,19 @@
         "ASTRA-0005",
         "ASTRA-3013"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Network Kernel Modules; detected 17 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/network_kernel_modules.yml",
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_report/tasks/main.yml",
+        "reports/lab/NetworkKernelModules/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T04:07:57Z",
+      "comments": "Implemented audit-only controls present in linux_cis.xlsx sheet Network Kernel Modules (control rows 3.2.1-3.3.11); no remediation/restart/reboot; OT placeholders retained; ready_for_engineer_review."
     },
     {
       "task_id": "ASTRA-2014",
