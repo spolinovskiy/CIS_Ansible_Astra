@@ -1,0 +1,223 @@
+---
+- name: Logging | Load authoritative linux_cis scope
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/cis_linux_scope/controls_from_excel.yml"
+    name: cis_scope_data
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: Logging | Build scoped Logging control list
+  ansible.builtin.set_fact:
+    cis_logging_controls: >-
+      {{
+        (cis_scope_data.controls | default([]))
+        | selectattr('record_type', 'equalto', 'control')
+        | selectattr('sheet_name', 'equalto', 'Logging')
+        | list
+      }}
+    cis_logging_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_logging_stack_selection"
+    - "MISSING_OT_BASELINE:approved_remote_log_hosts"
+    - "MISSING_OT_BASELINE:approved_journald_settings"
+    - "MISSING_OT_BASELINE:approved_rsyslog_settings"
+    - "MISSING_OT_BASELINE:approved_auditd_backlog_limit_min"
+    - "MISSING_OT_BASELINE:approved_auditd_rule_exceptions"
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: Logging | Gather package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: Logging | Gather service facts
+  ansible.builtin.service_facts:
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: 6.1.2.2-6.1.2.4 | Collect journald setting lines
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E -h -- '^\s*(ForwardToSyslog|Compress|Storage)\s*=' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf 2>/dev/null || true
+  register: cis_logging_journald_settings_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_6_1_2_2, cis_6_1_2_3, cis_6_1_2_4, logging, chapter_logging, astra, audit]
+
+- name: 6.2.1.3-6.2.1.4 | Collect grub linux boot lines
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -R -E -h -- '^\s*linux' /boot/grub*/grub*.cfg 2>/dev/null || true
+  register: cis_logging_grub_linux_lines_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_6_2_1_3, cis_6_2_1_4, logging, chapter_logging, astra, audit]
+
+- name: Logging | Initialize chapter result and evidence maps
+  ansible.builtin.set_fact:
+    cis_logging_results_map: {}
+    cis_logging_evidence_map: {}
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: Logging | Build per-control results and evidence
+  ansible.builtin.set_fact:
+    cis_logging_results_map: "{{ cis_logging_results_map | combine({ cis_logging_control_id: cis_logging_result_entry }, recursive=True) }}"
+    cis_logging_evidence_map: "{{ cis_logging_evidence_map | combine({ cis_logging_control_id: cis_logging_evidence_entry }, recursive=True) }}"
+  vars:
+    cis_logging_control_id: "{{ item.cis_control_id }}"
+    cis_logging_control_title: "{{ item.cis_control_title }}"
+    cis_logging_impl_class: "{{ item.implementation_class | default('needs_scope_clarification') }}"
+    cis_logging_journald_service: "{{ ansible_facts.services.get('systemd-journald.service', {}) }}"
+    cis_logging_rsyslog_service: "{{ ansible_facts.services.get('rsyslog.service', {}) }}"
+    cis_logging_auditd_service: "{{ ansible_facts.services.get('auditd.service', {}) }}"
+    cis_logging_journal_upload_service: "{{ ansible_facts.services.get('systemd-journal-upload.service', {}) }}"
+    cis_logging_journal_remote_service: "{{ ansible_facts.services.get('systemd-journal-remote.service', {}) }}"
+    cis_logging_journald_lines: "{{ cis_logging_journald_settings_cmd.stdout_lines | default([]) }}"
+    cis_logging_grub_linux_lines: "{{ cis_logging_grub_linux_lines_cmd.stdout_lines | default([]) }}"
+    cis_logging_result_entry: >-
+      {% set default_reason = 'Control requires manual review or scope clarification for OT-safe validation.' %}
+      {% if cis_logging_control_id == '6.1.1.1' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if (cis_logging_journald_service.state | default('')) == 'running' and (cis_logging_journald_service.status | default('')) == 'enabled' else 'fail'),
+        'reason': ('systemd-journald.service is enabled and running' if (cis_logging_journald_service.state | default('')) == 'running' and (cis_logging_journald_service.status | default('')) == 'enabled' else 'systemd-journald.service is not both enabled and running')
+      } }}
+      {% elif cis_logging_control_id == '6.1.1.4' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_journald_service.state | default('')) == 'running') and not ((cis_logging_rsyslog_service.state | default('')) == 'running') else 'fail'),
+        'reason': ('journald is active and rsyslog is not active' if ((cis_logging_journald_service.state | default('')) == 'running') and not ((cis_logging_rsyslog_service.state | default('')) == 'running') else 'logging stack selection needs explicit validation against approved OT baseline')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.1.1' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ('systemd-journal-remote' in (ansible_facts.packages | default({}))) else 'fail'),
+        'reason': ('systemd-journal-remote package is installed' if ('systemd-journal-remote' in (ansible_facts.packages | default({}))) else 'systemd-journal-remote package is not installed')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.1.3' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if (cis_logging_journal_upload_service.state | default('')) == 'running' and (cis_logging_journal_upload_service.status | default('')) == 'enabled' else 'fail'),
+        'reason': ('systemd-journal-upload.service is enabled and running' if (cis_logging_journal_upload_service.state | default('')) == 'running' and (cis_logging_journal_upload_service.status | default('')) == 'enabled' else 'systemd-journal-upload.service is not both enabled and running')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.1.4' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if (cis_logging_journal_remote_service.state | default('')) not in ['running', 'started'] else 'fail'),
+        'reason': ('systemd-journal-remote.service is not running' if (cis_logging_journal_remote_service.state | default('')) not in ['running', 'started'] else 'systemd-journal-remote.service is running')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.2' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_journald_lines | select('search', '^\\s*ForwardToSyslog\\s*=\\s*no\\b') | list | length) > 0) else 'fail'),
+        'reason': ('ForwardToSyslog=no found in journald configuration' if ((cis_logging_journald_lines | select('search', '^\\s*ForwardToSyslog\\s*=\\s*no\\b') | list | length) > 0) else 'ForwardToSyslog=no not found in journald configuration')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.3' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_journald_lines | select('search', '^\\s*Compress\\s*=') | list | length) > 0) else 'fail'),
+        'reason': ('Compress setting found in journald configuration' if ((cis_logging_journald_lines | select('search', '^\\s*Compress\\s*=') | list | length) > 0) else 'Compress setting not found in journald configuration')
+      } }}
+      {% elif cis_logging_control_id == '6.1.2.4' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_journald_lines | select('search', '^\\s*Storage\\s*=') | list | length) > 0) else 'fail'),
+        'reason': ('Storage setting found in journald configuration' if ((cis_logging_journald_lines | select('search', '^\\s*Storage\\s*=') | list | length) > 0) else 'Storage setting not found in journald configuration')
+      } }}
+      {% elif cis_logging_control_id == '6.1.3.1' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ('rsyslog' in (ansible_facts.packages | default({}))) else 'fail'),
+        'reason': ('rsyslog package is installed' if ('rsyslog' in (ansible_facts.packages | default({}))) else 'rsyslog package is not installed')
+      } }}
+      {% elif cis_logging_control_id == '6.1.3.2' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if (cis_logging_rsyslog_service.state | default('')) == 'running' and (cis_logging_rsyslog_service.status | default('')) == 'enabled' else 'fail'),
+        'reason': ('rsyslog.service is enabled and running' if (cis_logging_rsyslog_service.state | default('')) == 'running' and (cis_logging_rsyslog_service.status | default('')) == 'enabled' else 'rsyslog.service is not both enabled and running')
+      } }}
+      {% elif cis_logging_control_id == '6.2.1.2' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if (cis_logging_auditd_service.state | default('')) == 'running' and (cis_logging_auditd_service.status | default('')) == 'enabled' else 'fail'),
+        'reason': ('auditd.service is enabled and running' if (cis_logging_auditd_service.state | default('')) == 'running' and (cis_logging_auditd_service.status | default('')) == 'enabled' else 'auditd.service is not both enabled and running')
+      } }}
+      {% elif cis_logging_control_id == '6.2.1.3' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_grub_linux_lines | reject('search', '\\baudit=1\\b') | list | length) == 0 and (cis_logging_grub_linux_lines | length) > 0) else 'fail'),
+        'reason': ('All detected grub linux lines contain audit=1' if ((cis_logging_grub_linux_lines | reject('search', '\\baudit=1\\b') | list | length) == 0 and (cis_logging_grub_linux_lines | length) > 0) else 'One or more grub linux lines are missing audit=1, or no linux lines were detected')
+      } }}
+      {% elif cis_logging_control_id == '6.2.1.4' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': ('pass' if ((cis_logging_grub_linux_lines | select('search', '\\baudit_backlog_limit=\\d+\\b') | list | length) > 0) else 'fail'),
+        'reason': ('audit_backlog_limit kernel parameter found in grub linux lines' if ((cis_logging_grub_linux_lines | select('search', '\\baudit_backlog_limit=\\d+\\b') | list | length) > 0) else 'audit_backlog_limit kernel parameter not found in grub linux lines')
+      } }}
+      {% elif cis_logging_impl_class == 'manual_review' %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': 'manual_review_required',
+        'reason': 'Control is explicitly marked manual in linux_cis scope and requires engineer review.'
+      } }}
+      {% else %}
+      {{ {
+        'control_id': cis_logging_control_id,
+        'title': cis_logging_control_title,
+        'status': 'manual_review_required',
+        'reason': default_reason
+      } }}
+      {% endif %}
+    cis_logging_evidence_entry:
+      control_id: "{{ cis_logging_control_id }}"
+      title: "{{ cis_logging_control_title }}"
+      implementation_class: "{{ cis_logging_impl_class }}"
+      normalized_scope_status: "{{ item.normalized_status | default('') }}"
+      audit_hint_from_excel: "{{ item.audit_hint_from_excel | default('') }}"
+      service_states:
+        journald: "{{ cis_logging_journald_service }}"
+        rsyslog: "{{ cis_logging_rsyslog_service }}"
+        auditd: "{{ cis_logging_auditd_service }}"
+        systemd_journal_upload: "{{ cis_logging_journal_upload_service }}"
+        systemd_journal_remote: "{{ cis_logging_journal_remote_service }}"
+      package_present:
+        rsyslog: "{{ 'rsyslog' in (ansible_facts.packages | default({})) }}"
+        systemd_journal_remote: "{{ 'systemd-journal-remote' in (ansible_facts.packages | default({})) }}"
+      journald_config_lines: "{{ cis_logging_journald_lines }}"
+      grub_linux_lines: "{{ cis_logging_grub_linux_lines }}"
+      commands:
+      - "service_facts"
+      - "package_facts"
+      - "grep ForwardToSyslog/Compress/Storage in journald config"
+      - "grep linux lines in grub config"
+      missing_information_placeholders: "{{ cis_logging_missing_information_placeholders }}"
+  loop: "{{ cis_logging_controls }}"
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]
+
+- name: Logging | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_logging_chapter_summary:
+      chapter_group: Logging
+      implemented_control_ids: "{{ cis_logging_controls | map(attribute='cis_control_id') | list }}"
+      results: "{{ cis_logging_results_map }}"
+      evidence: "{{ cis_logging_evidence_map }}"
+      missing_information_placeholders: "{{ cis_logging_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, logging, chapter_logging, astra, audit]

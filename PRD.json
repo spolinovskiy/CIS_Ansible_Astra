@@ -1561,14 +1561,19 @@
         "ASTRA-0005",
         "ASTRA-3014"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Logging; detected 70 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/logging.yml",
+        "roles/cis_report/tasks/main.yml",
+        "reports/lab/Logging/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T07:45:00Z",
+      "comments": "Implemented audit-only Logging chapter scoped strictly to linux_cis.xlsx Logging control rows; added logging chapter task include, chapter task, report map merge, and chapter report with explicit OT placeholders; no remediation/restarts/reboot."
     },
     {
       "task_id": "ASTRA-2015",
