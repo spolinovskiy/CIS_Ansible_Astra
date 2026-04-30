@@ -1792,14 +1792,18 @@
         "ASTRA-0005",
         "ASTRA-3017"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Packages; detected 6 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/packages.yml",
+        "reports/lab/Packages/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T07:40:00Z",
+      "comments": "Implemented audit-only Packages controls strictly from linux_cis.xlsx sheet Packages (manual controls only); offline-safe evidence collection only; no remediation/package changes/restart/reboot; explicit OT package-source placeholders retained."
     },
     {
       "task_id": "ASTRA-2018",

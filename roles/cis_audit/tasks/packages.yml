@@ -1,0 +1,122 @@
+---
+- name: Packages | Load authoritative linux_cis scope
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/cis_linux_scope/controls_from_excel.yml"
+    name: cis_scope_data
+  changed_when: false
+  tags: [cis, packages, chapter_packages, astra, audit]
+
+- name: Packages | Build scoped controls and OT placeholders
+  ansible.builtin.set_fact:
+    cis_packages_controls: >-
+      {{
+        (cis_scope_data.controls | default([]))
+        | selectattr('record_type', 'equalto', 'control')
+        | selectattr('sheet_name', 'equalto', 'Packages')
+        | list
+      }}
+    cis_packages_missing_information_placeholders:
+      - "MISSING_OT_BASELINE:approved_package_sources"
+      - "MISSING_OT_BASELINE:approved_repository_channels"
+      - "MISSING_OT_BASELINE:approved_gpg_key_fingerprints"
+      - "MISSING_OT_BASELINE:approved_patch_window_and_rollback"
+      - "MISSING_OT_POLICY:package_source_policy"
+  changed_when: false
+  tags: [cis, packages, chapter_packages, astra, audit]
+
+- name: Packages | Collect host-local apt source listing evidence
+  ansible.builtin.command: ls -1 /etc/apt/sources.list /etc/apt/sources.list.d
+  register: cis_packages_sources_paths_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_2, packages, chapter_packages, astra, audit]
+
+- name: Packages | Collect host-local apt source content evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+      [ -e "$f" ] || continue
+      echo "### ${f}"
+      sed -n '1,200p' "$f"
+    done
+  args:
+    executable: /bin/bash
+  register: cis_packages_sources_content_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_2, packages, chapter_packages, astra, audit]
+
+- name: Packages | Collect host-local apt trust key listing evidence
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v apt-key >/dev/null 2>&1; then
+      apt-key list
+    else
+      find /etc/apt/trusted.gpg.d -maxdepth 1 -type f -name '*.gpg' -print 2>/dev/null
+    fi
+  args:
+    executable: /bin/bash
+  register: cis_packages_gpg_evidence_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_2, packages, chapter_packages, astra, audit]
+
+- name: Packages | Collect host-local pending package update evidence
+  ansible.builtin.command: apt list --upgradable
+  register: cis_packages_upgradable_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_1_2, packages, chapter_packages, astra, audit]
+
+- name: Packages | Initialize chapter result and evidence maps
+  ansible.builtin.set_fact:
+    cis_packages_results_map: {}
+    cis_packages_evidence_map: {}
+  changed_when: false
+  tags: [cis, packages, chapter_packages, astra, audit]
+
+- name: Packages | Build per-control results and evidence
+  ansible.builtin.set_fact:
+    cis_packages_results_map: "{{ cis_packages_results_map | combine({ cis_packages_control_id: cis_packages_result_entry }, recursive=True) }}"
+    cis_packages_evidence_map: "{{ cis_packages_evidence_map | combine({ cis_packages_control_id: cis_packages_evidence_entry }, recursive=True) }}"
+  vars:
+    cis_packages_control_id: "{{ item.cis_control_id }}"
+    cis_packages_control_title: "{{ item.cis_control_title }}"
+    cis_packages_impl_class: "{{ item.implementation_class | default('manual_review') }}"
+    cis_packages_result_entry: >-
+      {{ {
+        'control_id': cis_packages_control_id,
+        'title': cis_packages_control_title,
+        'status': 'manual_review_required',
+        'reason': 'Control is marked manual in linux_cis scope and requires engineer review with approved offline package-source policy.'
+      } }}
+    cis_packages_evidence_entry:
+      control_id: "{{ cis_packages_control_id }}"
+      title: "{{ cis_packages_control_title }}"
+      implementation_class: "{{ cis_packages_impl_class }}"
+      normalized_scope_status: "{{ item.normalized_status | default('') }}"
+      audit_hint_from_excel: "{{ item.audit_hint_from_excel | default('') }}"
+      apt_sources_paths_stdout_lines: "{{ cis_packages_sources_paths_cmd.stdout_lines | default([]) }}"
+      apt_sources_content_stdout_lines: "{{ cis_packages_sources_content_cmd.stdout_lines | default([]) }}"
+      apt_gpg_evidence_stdout_lines: "{{ cis_packages_gpg_evidence_cmd.stdout_lines | default([]) }}"
+      apt_upgradable_stdout_lines: "{{ cis_packages_upgradable_cmd.stdout_lines | default([]) }}"
+      commands:
+        - "ls -1 /etc/apt/sources.list /etc/apt/sources.list.d"
+        - "sed -n over /etc/apt/sources.list and /etc/apt/sources.list.d/*.list/*.sources"
+        - "apt-key list (or list trusted.gpg.d files)"
+        - "apt list --upgradable"
+      missing_information_placeholders: "{{ cis_packages_missing_information_placeholders }}"
+  loop: "{{ cis_packages_controls }}"
+  changed_when: false
+  tags: [cis, packages, chapter_packages, astra, audit]
+
+- name: Packages | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_packages_chapter_summary:
+      chapter_group: "Packages"
+      implemented_control_ids: "{{ cis_packages_controls | map(attribute='cis_control_id') | list }}"
+      results: "{{ cis_packages_results_map }}"
+      evidence: "{{ cis_packages_evidence_map }}"
+      missing_information_placeholders: "{{ cis_packages_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, packages, chapter_packages, astra, audit]

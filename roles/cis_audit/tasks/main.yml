@@ -35,6 +35,10 @@
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]
 
+- name: Audit | Execute Packages chapter controls
+  ansible.builtin.include_tasks: packages.yml
+  tags: [cis, audit, astra, packages, chapter_packages]
+
 - name: Audit | Execute SUDO chapter controls
   ansible.builtin.include_tasks: sudo.yml
   tags: [cis, audit, astra, sudo, chapter_sudo]
