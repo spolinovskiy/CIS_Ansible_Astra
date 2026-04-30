@@ -27,6 +27,10 @@
   ansible.builtin.include_tasks: services.yml
   tags: [cis, audit, astra, services, chapter_services]
 
+- name: Audit | Execute Network Devices chapter controls
+  ansible.builtin.include_tasks: network_devices.yml
+  tags: [cis, audit, astra, network_devices, chapter_network_devices]
+
 - name: Audit | Execute Filesystem chapter controls
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]

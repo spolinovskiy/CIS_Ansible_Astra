@@ -1,0 +1,92 @@
+---
+- name: Network Devices | Load authoritative linux_cis scope
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../data/cis_linux_scope/controls_from_excel.yml"
+    name: cis_scope_data
+  changed_when: false
+  tags: [cis, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Build scoped controls and OT placeholders
+  ansible.builtin.set_fact:
+    cis_network_devices_controls: >-
+      {{
+        (cis_scope_data.controls | default([]))
+        | selectattr('record_type', 'equalto', 'control')
+        | selectattr('sheet_name', 'equalto', 'Network Devices')
+        | list
+      }}
+    cis_network_devices_missing_information_placeholders:
+      - "MISSING_OT_BASELINE:ipv6_required_status"
+      - "MISSING_OT_BASELINE:approved_wireless_interfaces"
+      - "MISSING_OT_BASELINE:approved_bluetooth_services"
+      - "MISSING_OT_BASELINE:approved_network_device_exceptions"
+  changed_when: false
+  tags: [cis, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Collect host-local network device evidence
+  ansible.builtin.command: ip -details link show
+  register: cis_network_devices_ip_link_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_1, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Collect host-local bluetooth service evidence
+  ansible.builtin.command: systemctl list-unit-files --type=service --no-pager --no-legend
+  register: cis_network_devices_systemctl_units_cmd
+  failed_when: false
+  changed_when: false
+  tags: [cis, cis_3_1, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Initialize chapter result and evidence maps
+  ansible.builtin.set_fact:
+    cis_network_devices_results_map: {}
+    cis_network_devices_evidence_map: {}
+  changed_when: false
+  tags: [cis, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Build per-control results and evidence
+  ansible.builtin.set_fact:
+    cis_network_devices_results_map: "{{ cis_network_devices_results_map | combine({ cis_network_devices_control_id: cis_network_devices_result_entry }, recursive=True) }}"
+    cis_network_devices_evidence_map: "{{ cis_network_devices_evidence_map | combine({ cis_network_devices_control_id: cis_network_devices_evidence_entry }, recursive=True) }}"
+  vars:
+    cis_network_devices_control_id: "{{ item.cis_control_id }}"
+    cis_network_devices_control_title: "{{ item.cis_control_title }}"
+    cis_network_devices_impl_class: "{{ item.implementation_class | default('manual_review') }}"
+    cis_network_devices_result_entry: >-
+      {{ {
+        'control_id': cis_network_devices_control_id,
+        'title': cis_network_devices_control_title,
+        'status': 'manual_review_required',
+        'reason': 'Control is marked manual in linux_cis scope and requires engineer review with OT baseline context.'
+      } }}
+    cis_network_devices_evidence_entry:
+      control_id: "{{ cis_network_devices_control_id }}"
+      title: "{{ cis_network_devices_control_title }}"
+      implementation_class: "{{ cis_network_devices_impl_class }}"
+      normalized_scope_status: "{{ item.normalized_status | default('') }}"
+      audit_hint_from_excel: "{{ item.audit_hint_from_excel | default('') }}"
+      ip_link_stdout_lines: "{{ cis_network_devices_ip_link_cmd.stdout_lines | default([]) }}"
+      bluetooth_related_units: >-
+        {{
+          (cis_network_devices_systemctl_units_cmd.stdout_lines | default([]))
+          | select('search', 'bluetooth')
+          | list
+        }}
+      commands:
+        - "ip -details link show"
+        - "systemctl list-unit-files --type=service --no-pager --no-legend"
+      missing_information_placeholders: "{{ cis_network_devices_missing_information_placeholders }}"
+  loop: "{{ cis_network_devices_controls }}"
+  changed_when: false
+  tags: [cis, network_devices, chapter_network_devices, astra, audit]
+
+- name: Network Devices | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_network_devices_chapter_summary:
+      chapter_group: "Network Devices"
+      implemented_control_ids: "{{ cis_network_devices_controls | map(attribute='cis_control_id') | list }}"
+      results: "{{ cis_network_devices_results_map }}"
+      evidence: "{{ cis_network_devices_evidence_map }}"
+      missing_information_placeholders: "{{ cis_network_devices_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, network_devices, chapter_network_devices, astra, audit]

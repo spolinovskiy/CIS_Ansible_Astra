@@ -1715,14 +1715,19 @@
         "ASTRA-0005",
         "ASTRA-3016"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Network Devices; detected 4 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/network_devices.yml",
+        "roles/cis_report/tasks/main.yml",
+        "reports/lab/NetworkDevices/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T08:10:00Z",
+      "comments": "Implemented audit-only Network Devices chapter scoped strictly to linux_cis.xlsx Network Devices control rows (3.1.1-3.1.3); added chapter include, chapter tasks, and report merge wiring; retained explicit OT placeholders; no remediation/restarts/reboot."
     },
     {
       "task_id": "ASTRA-2017",
