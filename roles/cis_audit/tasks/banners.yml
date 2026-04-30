@@ -1,0 +1,209 @@
+---
+- name: Banners | Define chapter defaults and placeholders
+  ansible.builtin.set_fact:
+    cis_banners_file_map:
+      "1.6.1":
+        path: /etc/motd
+        title: Ensure message of the day is configured properly
+        approved_source: "{{ cis_banners_approved_motd_text_source | default('') }}"
+        placeholder: "MISSING_OT_BASELINE:approved_motd_banner_text_source"
+      "1.6.2":
+        path: /etc/issue
+        title: Ensure local login warning banner is configured properly
+        approved_source: "{{ cis_banners_approved_issue_text_source | default('') }}"
+        placeholder: "MISSING_OT_BASELINE:approved_issue_banner_text_source"
+      "1.6.3":
+        path: /etc/issue.net
+        title: Ensure remote login warning banner is configured properly
+        approved_source: "{{ cis_banners_approved_issue_net_text_source | default('') }}"
+        placeholder: "MISSING_OT_BASELINE:approved_issue_net_banner_text_source"
+    cis_banners_access_map:
+      "1.6.4":
+        path: /etc/motd
+        title: Ensure access to /etc/motd is configured
+      "1.6.5":
+        path: /etc/issue
+        title: Ensure access to /etc/issue is configured
+      "1.6.6":
+        path: /etc/issue.net
+        title: Ensure access to /etc/issue.net is configured
+    cis_banners_expected_owner: root
+    cis_banners_expected_group: root
+    cis_banners_expected_mode: "0644"
+    cis_banners_missing_information_placeholders:
+    - "MISSING_OT_BASELINE:approved_motd_banner_text_source"
+    - "MISSING_OT_BASELINE:approved_issue_banner_text_source"
+    - "MISSING_OT_BASELINE:approved_issue_net_banner_text_source"
+  changed_when: false
+  tags: [cis, cis_1_6, banners, chapter_banners, astra, audit]
+
+- name: 1.6.1-1.6.3 | Stat banner content files
+  ansible.builtin.stat:
+    path: "{{ item.value.path }}"
+  loop: "{{ cis_banners_file_map | dict2items }}"
+  register: cis_1_6_1_3_stat
+  changed_when: false
+  tags: [cis, cis_1_6_1, cis_1_6_2, cis_1_6_3, banners, chapter_banners, astra, audit]
+
+- name: 1.6.1-1.6.3 | Read banner content files
+  ansible.builtin.command: "cat {{ item.value.path }}"
+  loop: "{{ cis_banners_file_map | dict2items }}"
+  register: cis_1_6_1_3_content_cmd
+  failed_when: false
+  changed_when: false
+  when: (cis_1_6_1_3_stat.results[ansible_loop.index0].stat.exists | default(false))
+  loop_control:
+    extended: true
+  tags: [cis, cis_1_6_1, cis_1_6_2, cis_1_6_3, banners, chapter_banners, astra, audit]
+
+- name: 1.6.1-1.6.3 | Build per-control content results
+  ansible.builtin.set_fact:
+    cis_banners_content_result_map: >-
+      {{
+        (cis_banners_content_result_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'fail'
+                if not (item.stat.exists | default(false))
+                else (
+                  'fail'
+                  if ((cis_1_6_1_3_content_cmd.results[ansible_loop.index0].stdout | default('') | trim | length) == 0)
+                  else (
+                    'manual_review_required'
+                    if ((item.item.value.approved_source | default('') | trim | length) == 0)
+                    else 'pass'
+                  )
+                )
+              ),
+              'reason': (
+                'Banner file is missing'
+                if not (item.stat.exists | default(false))
+                else (
+                  'Banner file is empty'
+                  if ((cis_1_6_1_3_content_cmd.results[ansible_loop.index0].stdout | default('') | trim | length) == 0)
+                  else (
+                    'Banner text exists but approved content source baseline is not provided'
+                    if ((item.item.value.approved_source | default('') | trim | length) == 0)
+                    else 'Banner text exists and approved content source baseline is provided'
+                  )
+                )
+              ),
+              'evidence': {
+                'path': item.item.value.path,
+                'exists': (item.stat.exists | default(false)),
+                'owner': (item.stat.pw_name | default('unknown')),
+                'group': (item.stat.gr_name | default('unknown')),
+                'mode': (item.stat.mode | default('unknown')),
+                'content_nonempty': ((cis_1_6_1_3_content_cmd.results[ansible_loop.index0].stdout | default('') | trim | length) > 0),
+                'content_preview_first_line': (((cis_1_6_1_3_content_cmd.results[ansible_loop.index0].stdout_lines | default([])) | first | default(''))),
+                'approved_banner_text_source': (item.item.value.approved_source | default('')),
+                'missing_information_placeholders': [item.item.value.placeholder]
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_1_6_1_3_stat.results | default([]) }}"
+  changed_when: false
+  loop_control:
+    extended: true
+  tags: [cis, cis_1_6_1, cis_1_6_2, cis_1_6_3, banners, chapter_banners, astra, audit]
+
+- name: 1.6.4-1.6.6 | Stat banner access files
+  ansible.builtin.stat:
+    path: "{{ item.value.path }}"
+  loop: "{{ cis_banners_access_map | dict2items }}"
+  register: cis_1_6_4_6_stat
+  changed_when: false
+  tags: [cis, cis_1_6_4, cis_1_6_5, cis_1_6_6, banners, chapter_banners, astra, audit]
+
+- name: 1.6.4-1.6.6 | Build per-control access results
+  ansible.builtin.set_fact:
+    cis_banners_access_result_map: >-
+      {{
+        (cis_banners_access_result_map | default({}))
+        | combine({
+            item.item.key: {
+              'control_id': item.item.key,
+              'title': item.item.value.title,
+              'status': (
+                'pass' if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == cis_banners_expected_owner
+                  and (item.stat.gr_name | default('')) == cis_banners_expected_group
+                  and (item.stat.mode | default('')) == cis_banners_expected_mode
+                ) else 'fail'
+              ),
+              'reason': (
+                'Ownership and mode match expected root:root 0644'
+                if (
+                  (item.stat.exists | default(false))
+                  and (item.stat.pw_name | default('')) == cis_banners_expected_owner
+                  and (item.stat.gr_name | default('')) == cis_banners_expected_group
+                  and (item.stat.mode | default('')) == cis_banners_expected_mode
+                ) else 'Expected root:root 0644 not satisfied'
+              ),
+              'evidence': {
+                'path': item.item.value.path,
+                'exists': (item.stat.exists | default(false)),
+                'owner': (item.stat.pw_name | default('unknown')),
+                'group': (item.stat.gr_name | default('unknown')),
+                'mode': (item.stat.mode | default('unknown')),
+                'expected_owner': cis_banners_expected_owner,
+                'expected_group': cis_banners_expected_group,
+                'expected_mode': cis_banners_expected_mode
+              }
+            }
+          }, recursive=True)
+      }}
+  loop: "{{ cis_1_6_4_6_stat.results | default([]) }}"
+  changed_when: false
+  tags: [cis, cis_1_6_4, cis_1_6_5, cis_1_6_6, banners, chapter_banners, astra, audit]
+
+- name: 1.6.1-1.6.6 | Materialize control facts
+  ansible.builtin.set_fact:
+    cis_1_6_1_result: "{{ cis_banners_content_result_map['1.6.1'] }}"
+    cis_1_6_2_result: "{{ cis_banners_content_result_map['1.6.2'] }}"
+    cis_1_6_3_result: "{{ cis_banners_content_result_map['1.6.3'] }}"
+    cis_1_6_4_result: "{{ cis_banners_access_result_map['1.6.4'] }}"
+    cis_1_6_5_result: "{{ cis_banners_access_result_map['1.6.5'] }}"
+    cis_1_6_6_result: "{{ cis_banners_access_result_map['1.6.6'] }}"
+    cis_1_6_1_evidence: "{{ cis_banners_content_result_map['1.6.1'].evidence }}"
+    cis_1_6_2_evidence: "{{ cis_banners_content_result_map['1.6.2'].evidence }}"
+    cis_1_6_3_evidence: "{{ cis_banners_content_result_map['1.6.3'].evidence }}"
+    cis_1_6_4_evidence: "{{ cis_banners_access_result_map['1.6.4'].evidence }}"
+    cis_1_6_5_evidence: "{{ cis_banners_access_result_map['1.6.5'].evidence }}"
+    cis_1_6_6_evidence: "{{ cis_banners_access_result_map['1.6.6'].evidence }}"
+  changed_when: false
+  tags: [cis, cis_1_6, banners, chapter_banners, astra, audit]
+
+- name: Banners | Build chapter summary object
+  ansible.builtin.set_fact:
+    cis_banners_chapter_summary:
+      chapter_group: Banners
+      implemented_control_ids:
+      - 1.6.1
+      - 1.6.2
+      - 1.6.3
+      - 1.6.4
+      - 1.6.5
+      - 1.6.6
+      results:
+        "1.6.1": "{{ cis_1_6_1_result }}"
+        "1.6.2": "{{ cis_1_6_2_result }}"
+        "1.6.3": "{{ cis_1_6_3_result }}"
+        "1.6.4": "{{ cis_1_6_4_result }}"
+        "1.6.5": "{{ cis_1_6_5_result }}"
+        "1.6.6": "{{ cis_1_6_6_result }}"
+      evidence:
+        "1.6.1": "{{ cis_1_6_1_evidence }}"
+        "1.6.2": "{{ cis_1_6_2_evidence }}"
+        "1.6.3": "{{ cis_1_6_3_evidence }}"
+        "1.6.4": "{{ cis_1_6_4_evidence }}"
+        "1.6.5": "{{ cis_1_6_5_evidence }}"
+        "1.6.6": "{{ cis_1_6_6_evidence }}"
+      missing_information_placeholders: "{{ cis_banners_missing_information_placeholders }}"
+  changed_when: false
+  tags: [cis, cis_1_6, banners, chapter_banners, astra, audit]

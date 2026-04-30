@@ -1408,14 +1408,18 @@
         "ASTRA-0005",
         "ASTRA-3012"
       ],
-      "status": "todo",
-      "technical_passes": false,
+      "status": "ready_for_engineer_review",
+      "technical_passes": true,
       "engineer_approval_required": true,
       "engineer_approval_status": "pending",
       "passes": false,
-      "evidence_files": [],
-      "updated_at": "2026-04-27T21:23:34Z",
-      "comments": "Implement only controls present in linux_cis.xlsx sheet Banners; detected 7 scoped rows including group headers. Stop at ready_for_engineer_review after chapter report."
+      "evidence_files": [
+        "roles/cis_audit/tasks/main.yml",
+        "roles/cis_audit/tasks/banners.yml",
+        "reports/lab/Banners/chapter_report.md"
+      ],
+      "updated_at": "2026-04-30T07:30:00Z",
+      "comments": "Implemented audit-only Banners controls from linux_cis.xlsx sheet rows 1.6.1-1.6.6; retained explicit OT placeholders; no remediation/restarts/reboot; chapter ready for engineer review."
     },
     {
       "task_id": "ASTRA-2013",

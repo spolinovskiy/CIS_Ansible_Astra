@@ -11,6 +11,10 @@
   ansible.builtin.include_tasks: timesync.yml
   tags: [cis, audit, astra, timesync, chapter_timesync]
 
+- name: Audit | Execute Banners chapter controls
+  ansible.builtin.include_tasks: banners.yml
+  tags: [cis, audit, astra, banners, chapter_banners]
+
 - name: Audit | Execute Filesystem chapter controls
   ansible.builtin.include_tasks: filesystem.yml
   tags: [cis, audit, astra, filesystem, chapter_filesystem]
